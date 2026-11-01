@@ -95,7 +95,7 @@ def main():
     if results:
         output = pd.DataFrame(results)
         output.to_csv(args.output, index=False)
-        print(f"\\nSaved {len(results)} rows to {args.output}")
+        print(f"\nSaved {len(results)} rows to {args.output}")
         print("Review all candidates manually; this output is not an order instruction.")
 
 
