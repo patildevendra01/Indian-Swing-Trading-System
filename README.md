@@ -33,6 +33,7 @@ Edit `config.yaml` and add liquid NSE symbols without the suffix, e.g. `RELIANCE
 
 ```bash
 python -m src.scan --config config.yaml
+python -m src.market_context
 ```
 
 For NSE data, the scanner appends `.NS` for Yahoo Finance. You can use `.BO` explicitly for BSE symbols. Yahoo Finance is a convenience data source, not an exchange-authoritative feed.
@@ -83,9 +84,11 @@ Backtest assumptions and important limitations are documented in [docs/backtesti
 - `src/risk.py` — quantity and reward/risk calculations
 - `src/scan.py` — daily watchlist scanner
 - `src/backtest.py` — conservative next-session historical simulation
+- `src/market_context.py` — NIFTY and sector-index EMA context
 - `tests/` — unit tests for risk sizing and indicators
 - `docs/strategy.md` — strategy and operating rules
 - `docs/data-sources.md` — data quality and verification
+- `docs/fundamental-event-checks.md` — news, corporate filings, FII/DII verification checklist
 - `journal/trade_journal_template.csv` — paper-trade journal
 
 ## Disclaimer
