@@ -60,12 +60,30 @@ See [docs/strategy.md](docs/strategy.md) for entry filters, exits, gap risk, eve
 6. Risk limits do not eliminate overnight gaps, slippage, or loss beyond the planned stop.
 7. No derivatives, leverage, short selling, or automatic live trading are implemented.
 
+## Backtesting and tests
+
+Run an exploratory historical simulation (default cost assumptions are illustrative):
+
+```bash
+python -m src.backtest --config config.yaml --cost-bps 20 --slippage-bps 5
+```
+
+Run unit tests:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Backtest assumptions and important limitations are documented in [docs/backtesting.md](docs/backtesting.md). The GitHub Actions workflow runs the unit tests on pushes and pull requests.
+
 ## Project layout
 
 - `config.example.yaml` — editable defaults and watchlist
 - `src/indicators.py` — technical indicators
 - `src/risk.py` — quantity and reward/risk calculations
 - `src/scan.py` — daily watchlist scanner
+- `src/backtest.py` — conservative next-session historical simulation
+- `tests/` — unit tests for risk sizing and indicators
 - `docs/strategy.md` — strategy and operating rules
 - `docs/data-sources.md` — data quality and verification
 - `journal/trade_journal_template.csv` — paper-trade journal
