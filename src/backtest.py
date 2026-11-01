@@ -144,7 +144,7 @@ def main():
     winners = result[result.net_pnl_inr > 0]
     gross_profit = winners.net_pnl_inr.sum()
     gross_loss = -result.loc[result.net_pnl_inr < 0, "net_pnl_inr"].sum()
-    print(f"\\nTrades: {len(result)} | Win rate: {len(winners)/len(result):.1%}")
+    print(f"\nTrades: {len(result)} | Win rate: {len(winners)/len(result):.1%}")
     print(f"Net P&L: ₹{result.net_pnl_inr.sum():,.2f} | Profit factor: {gross_profit/gross_loss if gross_loss else float('inf'):.2f}")
     print(f"Saved detailed trades to {args.output}")
     print("Single-symbol-at-a-time results are not a portfolio backtest; validate out-of-sample.")
