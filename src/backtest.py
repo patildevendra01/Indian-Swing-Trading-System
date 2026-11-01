@@ -22,7 +22,7 @@ def backtest_symbol(symbol: str, cfg: dict, cost_bps: float = 20.0,
                     slippage_bps: float = 5.0, max_gap_pct: float = 2.5) -> list[dict]:
     market, account, st = cfg["market"], cfg["account"], cfg["strategy"]
     ticker = yahoo_symbol(symbol, market.get("exchange", "NSE"))
-    raw = yf.download(ticker, period=market.get("history_period", "5y"),
+    raw = yf.download(ticker, period=cfg.get("backtest", {}).get("history_period", "5y"),
                       interval="1d", auto_adjust=True, progress=False, threads=False)
     if raw.empty:
         return []
@@ -119,19 +119,23 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--output", default="backtest_trades.csv")
-    parser.add_argument("--cost-bps", type=float, default=20.0,
+    parser.add_argument("--cost-bps", type=float, default=None,
                         help="Estimated total round-trip costs in basis points of traded value")
-    parser.add_argument("--slippage-bps", type=float, default=5.0)
-    parser.add_argument("--max-gap-pct", type=float, default=2.5)
+    parser.add_argument("--slippage-bps", type=float, default=None)
+    parser.add_argument("--max-gap-pct", type=float, default=None)
     args = parser.parse_args()
-    if min(args.cost_bps, args.slippage_bps, args.max_gap_pct) < 0:
-        parser.error("cost, slippage and gap limits must be non-negative")
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    bt = cfg.get("backtest", {})
+    cost_bps = bt.get("cost_bps", 20.0) if args.cost_bps is None else args.cost_bps
+    slippage_bps = bt.get("slippage_bps", 5.0) if args.slippage_bps is None else args.slippage_bps
+    max_gap_pct = bt.get("max_gap_pct", 2.5) if args.max_gap_pct is None else args.max_gap_pct
+    if min(cost_bps, slippage_bps, max_gap_pct) < 0:
+        parser.error("cost, slippage and gap limits must be non-negative")
     all_trades = []
     for symbol in cfg.get("watchlist", []):
         try:
-            trades = backtest_symbol(symbol, cfg, args.cost_bps, args.slippage_bps, args.max_gap_pct)
+            trades = backtest_symbol(symbol, cfg, cost_bps, slippage_bps, max_gap_pct)
             all_trades.extend(trades)
             print(f"{symbol}: {len(trades)} completed simulated trades")
         except Exception as exc:
