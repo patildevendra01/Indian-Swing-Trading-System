@@ -13,6 +13,12 @@ account:
   max_position_pct: 25.0
   max_open_positions: 3
 
+backtest:
+  history_period: 5y
+  cost_bps: 20.0
+  slippage_bps: 5.0
+  max_gap_pct: 2.5
+
 strategy:
   holding_days_min: 3
   holding_days_max: 10
