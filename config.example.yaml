@@ -1,0 +1,42 @@
+# Copy to config.yaml and edit the watchlist.
+market:
+  exchange: NSE
+  currency: INR
+  interval: 1d
+  history_period: 1y
+
+account:
+  capital_min_inr: 10000
+  capital_max_inr: 25000
+  capital_inr: 15000
+  risk_per_trade_pct: 0.5
+  max_position_pct: 25.0
+  max_open_positions: 3
+
+strategy:
+  holding_days_min: 3
+  holding_days_max: 10
+  min_reward_risk: 2.0
+  ema_fast: 20
+  ema_slow: 50
+  rsi_period: 14
+  atr_period: 14
+  volume_lookback: 20
+  min_relative_volume: 1.5
+  breakout_lookback: 20
+  min_price_inr: 50
+  min_avg_daily_turnover_inr: 50000000
+  max_atr_pct: 6.0
+
+# Enter NSE symbols without suffix. BSE tickers may end in .BO.
+watchlist:
+  - RELIANCE
+  - TCS
+  - INFY
+  - HDFCBANK
+  - ICICIBANK
+  - LT
+  - SBIN
+  - BHARTIARTL
+  - ITC
+  - SUNPHARMA
