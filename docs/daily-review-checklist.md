@@ -2,9 +2,10 @@
 
 ## After market close
 - [ ] Confirm scan data date and source; reject stale/incomplete data.
-- [ ] Review NIFTY and relevant sector trend.
+- [ ] Run `python -m src.market_context` and review NIFTY and relevant sector trend.
+- [ ] Check official NSE/BSE FII/FPI and DII cash-market activity; record date and source.
 - [ ] Review candidate charts and liquidity; do not rely on scan ranking alone.
-- [ ] Check NSE/BSE corporate announcements and company filings.
+- [ ] Check NSE/BSE corporate announcements and company filings; use `docs/fundamental-event-checks.md`.
 - [ ] Check upcoming results, board meetings, and other event risk.
 - [ ] Confirm entry, structural stop, target, quantity, and at least 2R potential.
 - [ ] Confirm planned risk is at most 0.5% of account capital.
