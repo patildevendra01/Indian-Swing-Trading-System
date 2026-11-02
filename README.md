@@ -29,7 +29,7 @@ pip install -r requirements.txt
 cp config.example.yaml config.yaml
 ```
 
-Edit `config.yaml` and add liquid NSE symbols without the suffix, e.g. `RELIANCE`, `INFY`, `TCS`. Then run:
+The example configuration includes 100 curated NSE symbols as a broad research universe. It is not an official index constituent list; verify current listing status, liquidity and corporate actions. Edit `config.yaml` to change symbols. The scanner pauses briefly between symbols to reduce data-provider throttling. Then run:
 
 ```bash
 python -m src.scan --config config.yaml
@@ -40,7 +40,7 @@ For NSE data, the scanner appends `.NS` for Yahoo Finance. You can use `.BO` exp
 
 ## What it does
 
-- Downloads daily OHLCV history for a manually curated watchlist.
+- Downloads daily OHLCV history for a curated 100-symbol NSE watchlist by default (editable in `config.yaml`).
 - Calculates EMA 20/50, RSI(14), ATR(14), and relative volume.
 - Flags a **research candidate** only when trend, momentum, volume, and breakout checks align.
 - Calculates quantity from the configured maximum rupee risk, stop distance, capital allocation cap, and minimum 2R target.
