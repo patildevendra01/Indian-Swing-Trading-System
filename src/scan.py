@@ -24,6 +24,8 @@ def load_config(path: str) -> dict:
 
 def yahoo_symbol(symbol: str, exchange: str) -> str:
     symbol = symbol.strip().upper()
+    # Yahoo Finance/NSE symbol changes; also support older local config.yaml files.
+    symbol = {"TATAMOTORS": "TMPV", "LTIM": "LTM"}.get(symbol, symbol)
     if "." in symbol:
         return symbol
     suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
