@@ -81,6 +81,24 @@ def sector_rank_adjustment(trend: str) -> float:
     return 2.0 if trend == "BULLISH" else (-2.0 if trend == "BEARISH" else 0.0)
 
 
+FILTER_GUIDANCE = {
+    "uptrend": "Wait for close > EMA20 > EMA50",
+    "momentum": "Wait for RSI to return to the 50–70 range",
+    "volume": "Wait for relative volume to reach the configured minimum",
+    "breakout": "Wait for a daily close above the prior breakout level",
+    "price_floor": "Below the configured minimum price; do not override automatically",
+    "turnover": "Wait for average daily traded value to meet the liquidity floor",
+    "volatility": "Wait for ATR percentage to fall within the configured maximum",
+}
+
+
+def failed_filter_guidance(failed: list[str]) -> str:
+    """Human-readable conditions still missing; never relax a filter automatically."""
+    if not failed:
+        return "All scanner filters passed; independently verify the setup before paper entry"
+    return "; ".join(FILTER_GUIDANCE[name] for name in failed)
+
+
 def scan_one(symbol: str, cfg: dict, sector_context: dict | None = None) -> dict:
     market, account, strategy = cfg["market"], cfg["account"], cfg["strategy"]
     ticker = yahoo_symbol(symbol, market.get("exchange", "NSE"))
@@ -113,13 +131,23 @@ def scan_one(symbol: str, cfg: dict, sector_context: dict | None = None) -> dict
     failed = [name for name, passed in checks.items() if not passed]
     score = filter_score(checks)
     rank_score = round(score + sector_rank_adjustment(sector_trend), 1)
+    prior_high = float(row["prior_high"]) if pd.notna(row["prior_high"]) else None
+    atr = float(row["atr"]) if pd.notna(row["atr"]) else None
     result = {"symbol": ticker, "sector_index": sector_index, "sector_trend": sector_trend,
               "filter_score_pct": score, "ranking_score": rank_score,
               "passed_filters": len(checks) - len(failed), "total_filters": len(checks),
-              "failed_filters": ", ".join(failed), "date": str(data.index[-1].date()), "close": round(close, 2),
+              "failed_filters": ", ".join(failed),
+              **{f"filter_{name}": bool(passed) for name, passed in checks.items()},
+              "date": str(data.index[-1].date()), "close": round(close, 2),
+              "ema_fast": round(float(row["ema_fast"]), 2),
+              "ema_slow": round(float(row["ema_slow"]), 2),
               "rsi": round(float(row["rsi"]), 1),
               "relative_volume": round(float(row["relative_volume"]), 2) if pd.notna(row["relative_volume"]) else None,
+              "required_relative_volume": float(strategy["min_relative_volume"]),
+              "prior_breakout_high": round(prior_high, 2) if prior_high is not None else None,
+              "atr": round(atr, 2) if atr is not None else None,
               "atr_pct": round(float(row["atr_pct"]), 2) if pd.notna(row["atr_pct"]) else None,
+              "next_action": failed_filter_guidance(failed),
               "status": "RESEARCH_CANDIDATE" if not failed else "WATCH / SKIP",
               "reason": "All screening filters passed" if not failed else "Failed: " + ", ".join(failed)}
     if not failed:
@@ -133,10 +161,15 @@ def scan_one(symbol: str, cfg: dict, sector_context: dict | None = None) -> dict
             result.update({"entry_reference": round(plan.entry, 2), "stop_reference": round(plan.stop, 2),
                            "target_reference": round(plan.target, 2), "quantity_ceiling": plan.quantity,
                            "planned_risk_inr": round(plan.planned_risk_inr, 2),
-                           "position_value_inr": round(plan.position_value_inr, 2)})
+                           "position_value_inr": round(plan.position_value_inr, 2),
+                           "reward_risk_reference": round(plan.reward_risk, 2),
+                           "trade_plan_status": "PAPER_REVIEW_ONLY"})
         except ValueError as exc:
             result["status"] = "NO TRADE"
             result["reason"] = str(exc)
+            result["trade_plan_status"] = "NOT_FEASIBLE"
+    else:
+        result["trade_plan_status"] = "NOT_GENERATED_FILTERS_FAILED"
     return result
 
 
@@ -175,6 +208,10 @@ def main():
             for _, row in ranked.iterrows():
                 print(f"{row['symbol']}: {row.get('filter_score_pct', 0)}% filters passed | "
                       f"sector {row.get('sector_trend', 'UNAVAILABLE')} | {row['reason']}")
+                if row.get("next_action"):
+                    print(f"  Next condition: {row['next_action']}")
+                if pd.notna(row.get("prior_breakout_high")):
+                    print(f"  Prior breakout reference (not an entry order): {row['prior_breakout_high']}")
         print("Ranking is a research-priority aid, not a probability or order instruction.")
 
 
