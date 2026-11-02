@@ -32,8 +32,8 @@ cp config.example.yaml config.yaml
 Run market context first so the scanner can include sector trends in its ranking. The example configuration includes 100 curated NSE symbols as a broad research universe. It is not an official index constituent list; verify current listing status, liquidity and corporate actions. Edit `config.yaml` to change symbols. The scanner pauses briefly between symbols to reduce data-provider throttling. Then run:
 
 ```bash
-python -m src.scan --config config.yaml
 python -m src.market_context
+python -m src.scan --config config.yaml
 ```
 
 For NSE data, the scanner appends `.NS` for Yahoo Finance. It also maps the old symbols `TATAMOTORS` → `TMPV` and `LTIM` → `LTM`, including in older local config files. You can use `.BO` explicitly for BSE symbols. Yahoo Finance is a convenience data source, not an exchange-authoritative feed.
