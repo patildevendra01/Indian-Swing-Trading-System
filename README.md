@@ -29,7 +29,7 @@ pip install -r requirements.txt
 cp config.example.yaml config.yaml
 ```
 
-The example configuration includes 100 curated NSE symbols as a broad research universe. It is not an official index constituent list; verify current listing status, liquidity and corporate actions. Edit `config.yaml` to change symbols. The scanner pauses briefly between symbols to reduce data-provider throttling. Then run:
+Run market context first so the scanner can include sector trends in its ranking. The example configuration includes 100 curated NSE symbols as a broad research universe. It is not an official index constituent list; verify current listing status, liquidity and corporate actions. Edit `config.yaml` to change symbols. The scanner pauses briefly between symbols to reduce data-provider throttling. Then run:
 
 ```bash
 python -m src.scan --config config.yaml
@@ -44,7 +44,7 @@ For NSE data, the scanner appends `.NS` for Yahoo Finance. It also maps the old 
 - Calculates EMA 20/50, RSI(14), ATR(14), and relative volume.
 - Flags a **research candidate** only when trend, momentum, volume, and breakout checks align.
 - Calculates quantity from the configured maximum rupee risk, stop distance, capital allocation cap, and minimum 2R target.
-- Prints a no-trade reason when data or risk constraints fail.
+- Prints a no-trade reason when data or risk constraints fail.\n- Ranks the watchlist by weighted filter proximity and, when `market_context.csv` exists, adds a small sector-trend tie-breaker. The score is a research-priority aid, not a probability or buy signal; sector mapping is indicative and some stocks may be unmapped.
 - Includes a CSV trade journal template and a simple risk calculator.
 
 ## Strategy overview
