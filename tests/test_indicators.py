@@ -41,3 +41,16 @@ class ScannerRankingTests(unittest.TestCase):
         from src.scan import sector_rank_adjustment
         self.assertGreater(sector_rank_adjustment("BULLISH"), sector_rank_adjustment("MIXED"))
         self.assertGreater(sector_rank_adjustment("MIXED"), sector_rank_adjustment("BEARISH"))
+
+
+
+class ScannerDiagnosticTests(unittest.TestCase):
+    def test_failed_filter_guidance_names_missing_conditions(self):
+        from src.scan import failed_filter_guidance
+        guidance = failed_filter_guidance(["volume", "breakout"])
+        self.assertIn("relative volume", guidance)
+        self.assertIn("daily close", guidance)
+
+    def test_no_failed_filters_still_requires_independent_review(self):
+        from src.scan import failed_filter_guidance
+        self.assertIn("independently verify", failed_filter_guidance([]))
