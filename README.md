@@ -36,7 +36,7 @@ python -m src.scan --config config.yaml
 python -m src.market_context
 ```
 
-For NSE data, the scanner appends `.NS` for Yahoo Finance. You can use `.BO` explicitly for BSE symbols. Yahoo Finance is a convenience data source, not an exchange-authoritative feed.
+For NSE data, the scanner appends `.NS` for Yahoo Finance. It also maps the old symbols `TATAMOTORS` → `TMPV` and `LTIM` → `LTM`, including in older local config files. You can use `.BO` explicitly for BSE symbols. Yahoo Finance is a convenience data source, not an exchange-authoritative feed.
 
 ## What it does
 
