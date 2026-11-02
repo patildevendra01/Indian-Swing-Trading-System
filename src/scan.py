@@ -32,14 +32,68 @@ def yahoo_symbol(symbol: str, exchange: str) -> str:
     return symbol + suffix
 
 
-def scan_one(symbol: str, cfg: dict) -> dict:
+SECTOR_INDEX = {
+    "TCS": "NIFTY_IT", "INFY": "NIFTY_IT", "HCLTECH": "NIFTY_IT", "WIPRO": "NIFTY_IT",
+    "TECHM": "NIFTY_IT", "LTM": "NIFTY_IT", "PERSISTENT": "NIFTY_IT", "COFORGE": "NIFTY_IT", "MPHASIS": "NIFTY_IT",
+    "SUNPHARMA": "NIFTY_PHARMA", "DRREDDY": "NIFTY_PHARMA", "CIPLA": "NIFTY_PHARMA", "DIVISLAB": "NIFTY_PHARMA",
+    "APOLLOHOSP": "NIFTY_PHARMA", "ZYDUSLIFE": "NIFTY_PHARMA", "TORNTPHARM": "NIFTY_PHARMA",
+    "AUROPHARMA": "NIFTY_PHARMA", "LUPIN": "NIFTY_PHARMA", "ALKEM": "NIFTY_PHARMA",
+    "MARUTI": "NIFTY_AUTO", "M&M": "NIFTY_AUTO", "EICHERMOT": "NIFTY_AUTO", "HEROMOTOCO": "NIFTY_AUTO",
+    "TVSMOTOR": "NIFTY_AUTO", "BOSCHLTD": "NIFTY_AUTO", "MOTHERSON": "NIFTY_AUTO", "TMPV": "NIFTY_AUTO",
+    "ITC": "NIFTY_FMCG", "HINDUNILVR": "NIFTY_FMCG", "NESTLEIND": "NIFTY_FMCG", "TATACONSUM": "NIFTY_FMCG",
+    "BRITANNIA": "NIFTY_FMCG", "DABUR": "NIFTY_FMCG", "GODREJCP": "NIFTY_FMCG", "UNITDSPR": "NIFTY_FMCG",
+    "MARICO": "NIFTY_FMCG", "COLPAL": "NIFTY_FMCG",
+    "TATASTEEL": "NIFTY_METAL", "JSWSTEEL": "NIFTY_METAL", "HINDALCO": "NIFTY_METAL",
+    "COALINDIA": "NIFTY_METAL", "NMDC": "NIFTY_METAL", "VEDL": "NIFTY_METAL", "SAIL": "NIFTY_METAL", "JINDALSTEL": "NIFTY_METAL",
+    "DLF": "NIFTY_REALTY",
+    "HDFCBANK": "NIFTY_BANK", "ICICIBANK": "NIFTY_BANK", "SBIN": "NIFTY_BANK", "KOTAKBANK": "NIFTY_BANK",
+    "AXISBANK": "NIFTY_BANK", "INDUSINDBK": "NIFTY_BANK", "BANKBARODA": "NIFTY_BANK", "PNB": "NIFTY_BANK",
+    "CANBK": "NIFTY_BANK", "IDFCFIRSTB": "NIFTY_BANK", "FEDERALBNK": "NIFTY_BANK", "BANDHANBNK": "NIFTY_BANK"
+}
+FILTER_WEIGHTS = {"uptrend": 2.0, "momentum": 1.0, "volume": 1.5, "breakout": 2.0,
+                  "price_floor": 0.5, "turnover": 1.0, "volatility": 1.0}
+
+
+def load_sector_context(path: str = "market_context.csv") -> dict:
+    """Read sector index trends from the market-context CSV when available."""
+    try:
+        frame = pd.read_csv(path)
+        if not {"index", "trend"}.issubset(frame.columns):
+            return {}
+        return dict(zip(frame["index"].astype(str), frame["trend"].astype(str)))
+    except (FileNotFoundError, OSError, pd.errors.ParserError):
+        return {}
+
+
+def filter_score(checks: dict) -> float:
+    """Weighted filter-pass percentage; this is not a probability of profit."""
+    total = sum(FILTER_WEIGHTS.values())
+    passed = sum(weight for name, weight in FILTER_WEIGHTS.items() if checks.get(name, False))
+    return round(100.0 * passed / total, 1)
+
+
+def sector_for(symbol: str) -> str:
+    base = symbol.strip().upper().replace(".NS", "").replace(".BO", "")
+    return SECTOR_INDEX.get(base, "UNMAPPED")
+
+
+def sector_rank_adjustment(trend: str) -> float:
+    return 2.0 if trend == "BULLISH" else (-2.0 if trend == "BEARISH" else 0.0)
+
+
+def scan_one(symbol: str, cfg: dict, sector_context: dict | None = None) -> dict:
     market, account, strategy = cfg["market"], cfg["account"], cfg["strategy"]
     ticker = yahoo_symbol(symbol, market.get("exchange", "NSE"))
+    base_symbol = ticker.rsplit(".", 1)[0]
+    sector_index = sector_for(base_symbol)
+    sector_trend = (sector_context or {}).get(sector_index, "UNAVAILABLE")
     raw = yf.download(ticker, period=market.get("history_period", "1y"),
                       interval=market.get("interval", "1d"), auto_adjust=True,
                       progress=False, threads=False)
     if raw.empty:
-        return {"symbol": ticker, "status": "SKIP", "reason": "No price history returned"}
+        return {"symbol": ticker, "status": "SKIP", "reason": "No price history returned",
+                "sector_index": sector_index, "sector_trend": sector_trend,
+                "filter_score_pct": 0.0, "ranking_score": 0.0}
     if isinstance(raw.columns, pd.MultiIndex):
         raw.columns = raw.columns.get_level_values(0)
     data = add_indicators(raw, strategy["ema_fast"], strategy["ema_slow"],
@@ -57,7 +111,12 @@ def scan_one(symbol: str, cfg: dict) -> dict:
         "volatility": pd.notna(row["atr_pct"]) and float(row["atr_pct"]) <= strategy["max_atr_pct"],
     }
     failed = [name for name, passed in checks.items() if not passed]
-    result = {"symbol": ticker, "date": str(data.index[-1].date()), "close": round(close, 2),
+    score = filter_score(checks)
+    rank_score = round(score + sector_rank_adjustment(sector_trend), 1)
+    result = {"symbol": ticker, "sector_index": sector_index, "sector_trend": sector_trend,
+              "filter_score_pct": score, "ranking_score": rank_score,
+              "passed_filters": len(checks) - len(failed), "total_filters": len(checks),
+              "failed_filters": ", ".join(failed), "date": str(data.index[-1].date()), "close": round(close, 2),
               "rsi": round(float(row["rsi"]), 1),
               "relative_volume": round(float(row["relative_volume"]), 2) if pd.notna(row["relative_volume"]) else None,
               "atr_pct": round(float(row["atr_pct"]), 2) if pd.notna(row["atr_pct"]) else None,
@@ -87,21 +146,36 @@ def main():
     parser.add_argument("--output", default="scan_results.csv", help="CSV output path")
     args = parser.parse_args()
     cfg = load_config(args.config)
+    sector_context = load_sector_context()
+    if sector_context:
+        print("Loaded sector trends from market_context.csv")
+    else:
+        print("No usable market_context.csv found; sector adjustment disabled.")
     results = []
     for symbol in cfg.get("watchlist", []):
         try:
-            result = scan_one(symbol, cfg)
+            result = scan_one(symbol, cfg, sector_context)
         except Exception as exc:  # keep scanner running if one symbol/data source fails
-            result = {"symbol": symbol, "status": "ERROR", "reason": str(exc)}
+            result = {"symbol": symbol, "status": "ERROR", "reason": str(exc),
+                      "filter_score_pct": 0.0, "ranking_score": 0.0}
         results.append(result)
         print(f"{result['symbol']}: {result['status']} — {result['reason']}")
         # Gentle pacing reduces the chance of throttling on large watchlists.
         time.sleep(max(0.0, float(cfg.get("market", {}).get("scan_delay_seconds", 0.5))))
     if results:
         output = pd.DataFrame(results)
+        if "ranking_score" in output.columns:
+            output = output.sort_values(["ranking_score", "filter_score_pct"], ascending=False,
+                                        na_position="last")
         output.to_csv(args.output, index=False)
         print(f"\nSaved {len(results)} rows to {args.output}")
-        print("Review all candidates manually; this output is not an order instruction.")
+        ranked = output[output["status"].isin(["RESEARCH_CANDIDATE", "WATCH / SKIP"])].head(15)
+        if not ranked.empty:
+            print("\nTOP 15 WATCHLIST BY FILTER PROXIMITY (not buy signals):")
+            for _, row in ranked.iterrows():
+                print(f"{row['symbol']}: {row.get('filter_score_pct', 0)}% filters passed | "
+                      f"sector {row.get('sector_trend', 'UNAVAILABLE')} | {row['reason']}")
+        print("Ranking is a research-priority aid, not a probability or order instruction.")
 
 
 if __name__ == "__main__":
