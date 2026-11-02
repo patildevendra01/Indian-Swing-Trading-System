@@ -1,5 +1,6 @@
 """Daily OHLCV watchlist scanner. Flags are research candidates, not trade advice."""
 import argparse
+import time
 from pathlib import Path
 import sys
 
@@ -92,6 +93,8 @@ def main():
             result = {"symbol": symbol, "status": "ERROR", "reason": str(exc)}
         results.append(result)
         print(f"{result['symbol']}: {result['status']} — {result['reason']}")
+        # Gentle pacing reduces the chance of throttling on large watchlists.
+        time.sleep(max(0.0, float(cfg.get("market", {}).get("scan_delay_seconds", 0.5))))
     if results:
         output = pd.DataFrame(results)
         output.to_csv(args.output, index=False)
