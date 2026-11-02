@@ -23,3 +23,21 @@ class IndicatorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScannerRankingTests(unittest.TestCase):
+    def test_filter_score_rewards_more_passed_filters(self):
+        from src.scan import filter_score
+        none = {name: False for name in ("uptrend", "momentum", "volume", "breakout",
+                                          "price_floor", "turnover", "volatility")}
+        all_pass = {name: True for name in none}
+        self.assertEqual(filter_score(none), 0.0)
+        self.assertEqual(filter_score(all_pass), 100.0)
+        partial = dict(none)
+        partial["uptrend"] = True
+        self.assertGreater(filter_score(partial), filter_score(none))
+
+    def test_sector_adjustment_does_not_change_filter_qualification(self):
+        from src.scan import sector_rank_adjustment
+        self.assertGreater(sector_rank_adjustment("BULLISH"), sector_rank_adjustment("MIXED"))
+        self.assertGreater(sector_rank_adjustment("MIXED"), sector_rank_adjustment("BEARISH"))
