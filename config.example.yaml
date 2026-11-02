@@ -1,4 +1,5 @@
-# Copy to config.yaml and edit the watchlist.
+# Copy to config.yaml and edit the watchlist if needed.
+# This curated 100-symbol NSE universe is a starting screen, not an official index constituent list.
 market:
   exchange: NSE
   currency: INR
@@ -34,15 +35,105 @@ strategy:
   min_avg_daily_turnover_inr: 50000000
   max_atr_pct: 6.0
 
-# Enter NSE symbols without suffix. BSE tickers may end in .BO.
+# 100 curated NSE symbols. Verify listing status, liquidity and corporate actions.
 watchlist:
   - RELIANCE
   - TCS
-  - INFY
   - HDFCBANK
   - ICICIBANK
-  - LT
-  - SBIN
   - BHARTIARTL
+  - SBIN
+  - INFY
   - ITC
+  - LT
+  - HINDUNILVR
+  - BAJFINANCE
+  - LICI
+  - HCLTECH
+  - MARUTI
   - SUNPHARMA
+  - TITAN
+  - KOTAKBANK
+  - ONGC
+  - NTPC
+  - AXISBANK
+  - ADANIENT
+  - ADANIPORTS
+  - ULTRACEMCO
+  - JSWSTEEL
+  - TATAMOTORS
+  - TATASTEEL
+  - POWERGRID
+  - M&M
+  - COALINDIA
+  - ASIANPAINT
+  - BAJAJFINSV
+  - NESTLEIND
+  - WIPRO
+  - GRASIM
+  - TECHM
+  - INDUSINDBK
+  - HINDALCO
+  - DRREDDY
+  - CIPLA
+  - EICHERMOT
+  - DIVISLAB
+  - APOLLOHOSP
+  - TATACONSUM
+  - BRITANNIA
+  - HEROMOTOCO
+  - BPCL
+  - IOC
+  - SHRIRAMFIN
+  - BEL
+  - TRENT
+  - PIDILITIND
+  - DABUR
+  - GAIL
+  - AMBUJACEM
+  - DLF
+  - CHOLAFIN
+  - BANKBARODA
+  - PNB
+  - CANBK
+  - IDFCFIRSTB
+  - JIOFIN
+  - ZYDUSLIFE
+  - TORNTPHARM
+  - HAVELLS
+  - GODREJCP
+  - INDIGO
+  - UNITDSPR
+  - TVSMOTOR
+  - BOSCHLTD
+  - POLYCAB
+  - SIEMENS
+  - ABB
+  - CUMMINSIND
+  - PERSISTENT
+  - COFORGE
+  - MPHASIS
+  - LTIM
+  - AUROPHARMA
+  - LUPIN
+  - ALKEM
+  - FEDERALBNK
+  - BANDHANBNK
+  - YESBANK
+  - NMDC
+  - VEDL
+  - SAIL
+  - JINDALSTEL
+  - MOTHERSON
+  - BHEL
+  - IRCTC
+  - NAUKRI
+  - PAYTM
+  - DMART
+  - PAGEIND
+  - COLPAL
+  - MARICO
+  - BERGEPAINT
+  - ICICIPRULI
+  - SBILIFE
+  - HDFCLIFE
