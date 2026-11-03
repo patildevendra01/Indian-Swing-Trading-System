@@ -150,6 +150,11 @@ def scan_one(symbol: str, cfg: dict, sector_context: dict | None = None) -> dict
               "next_action": failed_filter_guidance(failed),
               "status": "RESEARCH_CANDIDATE" if not failed else "WATCH / SKIP",
               "reason": "All screening filters passed" if not failed else "Failed: " + ", ".join(failed)}
+    # Capital feasibility is evaluated only after every technical filter passes.
+    # This prevents a technically strong but unaffordable/high-risk share from
+    # being presented as a paper-trade candidate.
+    result["capital_feasibility"] = "NOT_ASSESSED_FILTERS_FAILED"
+    result["eligible_for_trade_review"] = False
     if not failed:
         # ATR-based initial stop proxy. Validate support/structure manually before any trade.
         stop = close - 1.5 * float(row["atr"])
@@ -163,11 +168,14 @@ def scan_one(symbol: str, cfg: dict, sector_context: dict | None = None) -> dict
                            "planned_risk_inr": round(plan.planned_risk_inr, 2),
                            "position_value_inr": round(plan.position_value_inr, 2),
                            "reward_risk_reference": round(plan.reward_risk, 2),
-                           "trade_plan_status": "PAPER_REVIEW_ONLY"})
+                           "trade_plan_status": "PAPER_REVIEW_ONLY",
+                           "capital_feasibility": "FEASIBLE",
+                           "eligible_for_trade_review": True})
         except ValueError as exc:
             result["status"] = "NO TRADE"
             result["reason"] = str(exc)
             result["trade_plan_status"] = "NOT_FEASIBLE"
+            result["capital_feasibility"] = "INFEASIBLE"
     else:
         result["trade_plan_status"] = "NOT_GENERATED_FILTERS_FAILED"
     return result
@@ -198,8 +206,10 @@ def main():
     if results:
         output = pd.DataFrame(results)
         if "ranking_score" in output.columns:
-            output = output.sort_values(["ranking_score", "filter_score_pct"], ascending=False,
-                                        na_position="last")
+            output = output.sort_values(
+                ["eligible_for_trade_review", "ranking_score", "filter_score_pct"],
+                ascending=[False, False, False], na_position="last"
+            )
         output.to_csv(args.output, index=False)
         print(f"\nSaved {len(results)} rows to {args.output}")
         ranked = output[output["status"].isin(["RESEARCH_CANDIDATE", "WATCH / SKIP"])].head(15)
