@@ -129,7 +129,6 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
             if exit_reason in ("stop_gap", "target_gap"):
                 path_max_high = max(path_max_high, op)
                 path_min_low = min(path_min_low, op)
-                path_max_close = max(path_max_close, op)
             else:
                 path_max_high = max(path_max_high, hi)
                 path_min_low = min(path_min_low, lo)
@@ -155,8 +154,7 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
         mfe_r = (path_max_high - entry) / initial_stop_distance
         mae_r = (path_min_low - entry) / initial_stop_distance
         best_close_r = (path_max_close - entry) / initial_stop_distance
-        exit_close = float(df.iloc[exit_idx]["Close"])
-        exit_close_r = (exit_close - entry) / initial_stop_distance
+        exit_fill_r = (exit_price - entry) / initial_stop_distance
         trades.append({
             "symbol": symbol, "signal_date": str(df.index[i].date()),
             "entry_date": str(df.index[entry_idx].date()), "exit_date": str(df.index[exit_idx].date()),
@@ -166,7 +164,7 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
             "entry_stop_distance_pct": round(initial_stop_distance / entry * 100, 4),
             "stop_distance_vs_signal_atr": round(initial_stop_distance / signal_atr, 4) if signal_atr else None,
             "mfe_r": round(mfe_r, 3), "mae_r": round(mae_r, 3),
-            "best_close_r": round(best_close_r, 3), "exit_close_r": round(exit_close_r, 3),
+            "best_close_r": round(best_close_r, 3), "exit_fill_r": round(exit_fill_r, 3),
             "entry": round(entry, 2), "stop": round(stop, 2), "target": round(target, 2),
             "exit": round(exit_price, 2), "quantity": qty, "holding_sessions": hold_sessions,
             "exit_reason": exit_reason, "gross_pnl_inr": round(gross, 2),
