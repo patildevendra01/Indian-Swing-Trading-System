@@ -121,3 +121,29 @@ These are descriptive cohorts of existing baseline trades, not a portfolio
 re-simulation with a market filter. Use development results only to form a
 single pre-specified hypothesis. OOS results are descriptive and must not be
 used to select or tune a filter. No production rules are changed.
+
+## Phase 7: stock relative-strength study vs NIFTY 50
+
+Run after the baseline backtest has created `backtest_trades.csv` and
+`backtest_data/`:
+
+```bash
+python -m src.relative_strength_research --input backtest_trades.csv --data-dir backtest_data --config config.yaml --lookback 20
+```
+
+The study measures each stock's trailing 20-session price return minus the
+NIFTY 50's trailing 20-session price return, using the latest close on or
+before each signal date. Fixed, pre-declared buckets are outperforming by at
+least +2 percentage points, within ±2 percentage points, and underperforming
+by at least -2 percentage points.
+
+Outputs:
+- `relative_strength_tagged_trades.csv`
+- `relative_strength_cohort_summary.csv`
+- `relative_strength_research_report.md`
+
+This is a descriptive grouping of existing baseline trades, not a portfolio
+re-simulation. Development results may motivate one hypothesis; OOS results
+are descriptive only and must not be used to tune a filter. Short/missing
+history is labelled unavailable. No production rules, scanner, configuration,
+risk settings, or live-trading behavior are changed.
