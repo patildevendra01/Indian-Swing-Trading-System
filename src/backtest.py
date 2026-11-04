@@ -1,4 +1,4 @@
-"""Conservative daily-bar backtester; no broker integration or live execution."""
+"""Conservative daily-bar backtester with a chronological 3y/2y walk-forward report."""
 import argparse
 from pathlib import Path
 import sys
@@ -11,12 +11,15 @@ import yfinance as yf
 try:
     from .indicators import add_indicators
     from .risk import build_trade_plan
-    from .scan import yahoo_symbol, sector_for, load_sector_context, sector_rank_adjustment
+    from .scan import yahoo_symbol
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from src.indicators import add_indicators
     from src.risk import build_trade_plan
-    from src.scan import yahoo_symbol, sector_for, load_sector_context, sector_rank_adjustment
+    from src.scan import yahoo_symbol
+
+
+FILTER_NAMES = ("trend", "momentum", "volume", "breakout", "price", "turnover", "volatility")
 
 
 def classify_exit(op: float, hi: float, lo: float, stop: float, target: float):
@@ -32,6 +35,37 @@ def classify_exit(op: float, hi: float, lo: float, stop: float, target: float):
     if hi >= target:
         return target, "target"
     return None, None
+
+
+def _filter_checks(row, st):
+    return {
+        "trend": bool(row["Close"] > row["ema_fast"] > row["ema_slow"]),
+        "momentum": bool(50 <= row["rsi"] <= 70),
+        "volume": bool(pd.notna(row["relative_volume"]) and row["relative_volume"] >= st["min_relative_volume"]),
+        "breakout": bool(pd.notna(row["prior_high"]) and row["Close"] > row["prior_high"]),
+        "price": bool(row["Close"] >= st["min_price_inr"]),
+        "turnover": bool(pd.notna(row["avg_turnover"]) and row["avg_turnover"] >= st["min_avg_daily_turnover_inr"]),
+        "volatility": bool(pd.notna(row["atr_pct"]) and row["atr_pct"] <= st["max_atr_pct"]),
+    }
+
+
+def count_filter_passes(frame: pd.DataFrame, cfg: dict) -> dict:
+    """Count each filter pass/fail and fully-qualified signals after EMA warm-up."""
+    st = cfg["strategy"]
+    warmup = max(100, st["ema_slow"] * 2, st["breakout_lookback"] + st["volume_lookback"])
+    counts = {f"{name}_{side}": 0 for name in FILTER_NAMES for side in ("pass", "fail")}
+    counts["bars_evaluated"] = 0
+    counts["raw_signals"] = 0
+    for _, row in frame.iloc[warmup:].iterrows():
+        if not all(pd.notna(row.get(k)) for k in ("Close", "ema_fast", "ema_slow", "rsi", "atr_pct")):
+            continue
+        checks = _filter_checks(row, st)
+        counts["bars_evaluated"] += 1
+        for name, passed in checks.items():
+            counts[f"{name}_{'pass' if passed else 'fail'}"] += 1
+        if all(checks.values()):
+            counts["raw_signals"] += 1
+    return counts
 
 
 def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
@@ -51,16 +85,11 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
     i = warmup
     while i < len(df) - 1:
         row = df.iloc[i]
-        checks = (
-            row["Close"] > row["ema_fast"] > row["ema_slow"],
-            50 <= row["rsi"] <= 70,
-            pd.notna(row["relative_volume"]) and row["relative_volume"] >= st["min_relative_volume"],
-            pd.notna(row["prior_high"]) and row["Close"] > row["prior_high"],
-            row["Close"] >= st["min_price_inr"],
-            pd.notna(row["avg_turnover"]) and row["avg_turnover"] >= st["min_avg_daily_turnover_inr"],
-            pd.notna(row["atr_pct"]) and row["atr_pct"] <= st["max_atr_pct"],
-        )
-        if not all(checks):
+        if not all(pd.notna(row.get(k)) for k in ("Close", "ema_fast", "ema_slow", "rsi", "atr",
+                                                   "relative_volume", "prior_high", "avg_turnover", "atr_pct")):
+            i += 1
+            continue
+        if not all(_filter_checks(row, st).values()):
             i += 1
             continue
         diagnostics["raw_signals"] += 1
@@ -85,8 +114,7 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
             i += 1
             continue
         qty, target = plan.quantity, plan.target
-        # holding_days_max counts trading sessions from the entry session, inclusive.
-        max_hold = int(st["holding_days_max"])
+        max_hold = int(st["holding_days_max"])  # entry session is session 1
         last_j = min(entry_idx + max_hold - 1, len(df) - 1)
         intended_last_j = entry_idx + max_hold - 1
         exit_price = exit_reason = None
@@ -101,7 +129,6 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
                 exit_idx = j
                 break
         if exit_price is None:
-            # Data ended before the planned holding window: not a completed trade.
             diagnostics["truncated_positions"] += 1
             break
         entry_slip, exit_slip = entry * slippage_bps / 10000, exit_price * slippage_bps / 10000
@@ -125,22 +152,6 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
     return trades, diagnostics
 
 
-def backtest_symbol(symbol: str, cfg: dict, cost_bps: float = 20.0,
-                    slippage_bps: float = 5.0, max_gap_pct: float = 2.5) -> list[dict]:
-    market, st = cfg["market"], cfg["strategy"]
-    ticker = yahoo_symbol(symbol, market.get("exchange", "NSE"))
-    raw = yf.download(ticker, period=cfg.get("backtest", {}).get("history_period", "5y"),
-                      interval="1d", auto_adjust=True, progress=False, threads=False)
-    if raw.empty:
-        return []
-    if isinstance(raw.columns, pd.MultiIndex):
-        raw.columns = raw.columns.get_level_values(0)
-    data = add_indicators(raw, st["ema_fast"], st["ema_slow"], st["rsi_period"],
-                          st["atr_period"], st["volume_lookback"], st["breakout_lookback"])
-    trades, _ = simulate_symbol(data, ticker, cfg, cost_bps, slippage_bps, max_gap_pct)
-    return trades
-
-
 def performance_summary(trades: pd.DataFrame, initial_capital: float, total_sessions: int) -> dict:
     if trades.empty:
         return {"trades": 0, "average_r": 0.0, "max_drawdown_pct": 0.0,
@@ -159,6 +170,43 @@ def performance_summary(trades: pd.DataFrame, initial_capital: float, total_sess
     }
 
 
+def nifty_buy_hold_return(start_date, end_date):
+    """NIFTY 50 price-index return over the requested dates; dividends excluded."""
+    try:
+        idx = yf.download("^NSEI", start=start_date, end=end_date + pd.Timedelta(days=1),
+                          interval="1d", auto_adjust=False, progress=False, threads=False)
+        if idx.empty:
+            return None
+        if isinstance(idx.columns, pd.MultiIndex):
+            idx.columns = idx.columns.get_level_values(0)
+        close = idx["Close"].dropna()
+        if len(close) < 2:
+            return None
+        return round(float((close.iloc[-1] / close.iloc[0] - 1) * 100), 2)
+    except Exception:
+        return None
+
+
+def _print_period_report(label, trades, signals, diagnostics, capital, sessions):
+    frame = pd.DataFrame(trades)
+    metrics = performance_summary(frame, capital, sessions)
+    print(f"\n{label}: bars={signals['bars_evaluated']} raw_signals={signals['raw_signals']} "
+          f"completed_trades={len(frame)} gap_rejected={diagnostics['gap_rejections']} "
+          f"risk_rejected={diagnostics['risk_rejections']} truncated={diagnostics['truncated_positions']}")
+    print("Filter pass/fail counts: " + " | ".join(
+        f"{name} {signals[name+'_pass']}/{signals[name+'_fail']}" for name in FILTER_NAMES))
+    if not frame.empty:
+        winners = frame[frame.net_pnl_inr > 0]
+        gross_profit = winners.net_pnl_inr.sum()
+        gross_loss = -frame.loc[frame.net_pnl_inr < 0, "net_pnl_inr"].sum()
+        print(f"Net P&L ₹{frame.net_pnl_inr.sum():,.2f} | Win rate {len(winners)/len(frame):.1%} | "
+              f"Profit factor {gross_profit/gross_loss if gross_loss else float('inf'):.2f}")
+    print(f"Average R {metrics['average_r']:.3f} | trade-close drawdown {metrics['max_drawdown_pct']:.2f}% | "
+          f"avg hold {metrics['average_holding_sessions']:.2f} sessions | "
+          f"rough independent-symbol exposure {metrics['exposure_pct']:.2f}%")
+    return frame
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="config.yaml")
@@ -175,11 +223,13 @@ def main():
     max_gap_pct = bt.get("max_gap_pct", 2.5) if args.max_gap_pct is None else args.max_gap_pct
     if min(cost_bps, slippage_bps, max_gap_pct) < 0:
         parser.error("cost, slippage and gap limits must be non-negative")
-    all_trades, raw_signals, gap_rejections, risk_rejections, truncated = [], 0, 0, 0, 0
-    total_sessions = 0
-    sector_context = load_sector_context(bt.get("market_context_file", "market_context.csv"))
-    print("Sector context is used for scanner ranking only, not as a backtest entry filter; "
-          "ranking does not change per-symbol signal qualification.")
+
+    downloaded = {}
+    all_trades = {"development_3y": [], "out_of_sample_2y": []}
+    aggregate = {p: {"signals": {f"{n}_{s}": 0 for n in FILTER_NAMES for s in ("pass", "fail")},
+                     "signals_extra": {"bars_evaluated": 0, "raw_signals": 0},
+                     "diag": {"gap_rejections": 0, "risk_rejections": 0, "truncated_positions": 0},
+                     "sessions": 0} for p in all_trades}
     for symbol in cfg.get("watchlist", []):
         try:
             ticker = yahoo_symbol(symbol, cfg["market"].get("exchange", "NSE"))
@@ -193,38 +243,63 @@ def main():
             data = add_indicators(raw, cfg["strategy"]["ema_fast"], cfg["strategy"]["ema_slow"],
                                   cfg["strategy"]["rsi_period"], cfg["strategy"]["atr_period"],
                                   cfg["strategy"]["volume_lookback"], cfg["strategy"]["breakout_lookback"])
-            trades, diag = simulate_symbol(data, ticker, cfg, cost_bps, slippage_bps, max_gap_pct)
-            all_trades.extend(trades)
-            raw_signals += diag["raw_signals"]
-            gap_rejections += diag["gap_rejections"]
-            risk_rejections += diag["risk_rejections"]
-            truncated += diag["truncated_positions"]
-            total_sessions = max(total_sessions, len(data))
-            print(f"{symbol}: signals={diag['raw_signals']} completed={len(trades)} "
-                  f"gap_rejected={diag['gap_rejections']} risk_rejected={diag['risk_rejections']} "
-                  f"truncated={diag['truncated_positions']}")
+            downloaded[symbol] = data
         except Exception as exc:
             print(f"{symbol}: ERROR — {exc}")
-    print(f"\nRaw signals: {raw_signals} | gap rejections: {gap_rejections} | "
-          f"risk rejections: {risk_rejections} | truncated positions: {truncated}")
-    if not all_trades:
-        print("No completed trades. This is not evidence that the strategy works or fails.")
+
+    if not downloaded:
+        print("No symbol data downloaded.")
         return
-    result = pd.DataFrame(all_trades)
-    result.to_csv(args.output, index=False)
-    winners = result[result.net_pnl_inr > 0]
-    gross_profit = winners.net_pnl_inr.sum()
-    gross_loss = -result.loc[result.net_pnl_inr < 0, "net_pnl_inr"].sum()
-    metrics = performance_summary(result, float(account["capital_inr"]), total_sessions)
-    print(f"Trades: {len(result)} | Win rate: {len(winners)/len(result):.1%}")
-    print(f"Net P&L: ₹{result.net_pnl_inr.sum():,.2f} | Profit factor: "
-          f"{gross_profit/gross_loss if gross_loss else float('inf'):.2f}")
-    print(f"Average R: {metrics['average_r']:.3f} | Max drawdown: {metrics['max_drawdown_pct']:.2f}%")
-    print(f"Average holding: {metrics['average_holding_sessions']:.2f} sessions | "
-          f"Exposure (per-symbol, not portfolio): {metrics['exposure_pct']:.2f}%")
-    print(f"Saved detailed trades to {args.output}")
-    print("This remains a collection of independent single-symbol simulations, not a portfolio backtest.")
-    print("NIFTY benchmark and walk-forward testing are not yet implemented; do not infer out-of-sample performance.")
+    earliest = min(df.index.min() for df in downloaded.values())
+    latest = max(df.index.max() for df in downloaded.values())
+    split_date = earliest + pd.DateOffset(years=3)
+    print(f"Chronological split: development {earliest.date()} to {split_date.date()} (first 3 years); "
+          f"out-of-sample {split_date.date()} to {latest.date()} (next 2 years).")
+    print("Rules/parameters remain fixed in both periods; this is a chronological holdout, not parameter tuning.")
+    print("Sector context is scanner ranking only, not a backtest entry filter.")
+
+    for symbol, data in downloaded.items():
+        for label, start, end in (("development_3y", earliest, split_date),
+                                  ("out_of_sample_2y", split_date, latest + pd.Timedelta(days=1))):
+            segment = data.loc[(data.index >= start) & (data.index < end)]
+            if segment.empty:
+                continue
+            trades, diag = simulate_symbol(segment, yahoo_symbol(symbol, cfg["market"].get("exchange", "NSE")),
+                                           cfg, cost_bps, slippage_bps, max_gap_pct)
+            counts = count_filter_passes(segment, cfg)
+            all_trades[label].extend([{**t, "period": label} for t in trades])
+            for k in aggregate[label]["signals"]:
+                aggregate[label]["signals"][k] += counts[k]
+            for k in aggregate[label]["signals_extra"]:
+                aggregate[label]["signals_extra"][k] += counts[k]
+            for k in aggregate[label]["diag"]:
+                aggregate[label]["diag"][k] += diag[k]
+            aggregate[label]["sessions"] = max(aggregate[label]["sessions"], len(segment))
+
+    frames = []
+    for label in ("development_3y", "out_of_sample_2y"):
+        a = aggregate[label]
+        counts = {**a["signals"], **a["signals_extra"]}
+        frame = _print_period_report(label, all_trades[label], counts, a["diag"],
+                                     float(account["capital_inr"]), a["sessions"])
+        if not frame.empty:
+            frames.append(frame)
+    if frames:
+        result = pd.concat(frames, ignore_index=True)
+        result.to_csv(args.output, index=False)
+        print(f"\nSaved all completed trades to {args.output}")
+    else:
+        print("\nNo completed trades in either period; inspect raw signal and filter counts above.")
+
+    benchmark = nifty_buy_hold_return(split_date, latest)
+    if benchmark is None:
+        print("NIFTY 50 benchmark: unavailable (index data could not be retrieved).")
+    else:
+        print(f"NIFTY 50 buy-and-hold price return over out-of-sample dates: {benchmark:.2f}% "
+              "(dividends excluded; compare as a market reference, not a portfolio-equivalent return).")
+    print("\nLimitations: independent single-symbol simulations, not a portfolio; trade-close drawdown, "
+          "rough aggregate exposure, current-watchlist survivorship bias, and simplified costs. "
+          "No live execution or investment advice.")
 
 
 if __name__ == "__main__":
