@@ -65,3 +65,14 @@ class BacktestLogicTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FilterDiagnosticTests(unittest.TestCase):
+    def test_filter_diagnostics_count_passes_and_fails(self):
+        from src.backtest import count_filter_passes
+        frame = qualifying_frame(104)
+        counts = count_filter_passes(frame, sample_config())
+        self.assertEqual(counts["bars_evaluated"], 4)
+        self.assertEqual(counts["raw_signals"], 4)
+        self.assertEqual(counts["trend_pass"], 4)
+        self.assertEqual(counts["trend_fail"], 0)
