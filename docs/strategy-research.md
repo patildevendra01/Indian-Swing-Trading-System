@@ -147,3 +147,19 @@ re-simulation. Development results may motivate one hypothesis; OOS results
 are descriptive only and must not be used to tune a filter. Short/missing
 history is labelled unavailable. No production rules, scanner, configuration,
 risk settings, or live-trading behavior are changed.
+
+
+## Phase 8: transaction-cost sensitivity and constrained portfolio estimate
+
+Run after the baseline backtest has created `backtest_trades.csv`:
+
+```bash
+python -m src.robustness_research --input backtest_trades.csv --capital 15000 --risk-pct 0.5 --max-position-pct 25 --max-positions 3
+```
+
+Outputs:
+- `robustness_cost_sensitivity.csv`: fixed cost/slippage scenarios (20/5, 30/10, 40/15, and 60/20 basis points per side).
+- `robustness_portfolio_estimate.csv`: approximate shared-capital reconstruction with risk-based quantity, 25% position cap, and maximum three overlapping positions.
+- `robustness_research_report.md`: combined results and limitations.
+
+The portfolio reconstruction is intentionally labelled approximate: it only has completed trades from independent per-symbol simulations, not all candidate signals or rejected entries. It re-sizes recorded trades chronologically and cannot reproduce a true daily portfolio or signal-ranking process. Treat it as a diagnostic lower-fidelity estimate, not validation or a forecast. No baseline scanner, backtest, or strategy parameters are changed; paper-only remains in force.
