@@ -137,9 +137,16 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
         costs = (entry * qty + exit_price * qty) * cost_bps / 10000
         net = gross - costs
         hold_sessions = exit_idx - entry_idx + 1
+        initial_stop_distance = entry - stop
+        signal_atr = float(row["atr"])
         trades.append({
             "symbol": symbol, "signal_date": str(df.index[i].date()),
             "entry_date": str(df.index[entry_idx].date()), "exit_date": str(df.index[exit_idx].date()),
+            "signal_close": round(signal_close, 2), "signal_atr": round(signal_atr, 4),
+            "entry_gap_pct": round(gap_pct, 4),
+            "entry_stop_distance_inr": round(initial_stop_distance, 4),
+            "entry_stop_distance_pct": round(initial_stop_distance / entry * 100, 4),
+            "stop_distance_vs_signal_atr": round(initial_stop_distance / signal_atr, 4) if signal_atr else None,
             "entry": round(entry, 2), "stop": round(stop, 2), "target": round(target, 2),
             "exit": round(exit_price, 2), "quantity": qty, "holding_sessions": hold_sessions,
             "exit_reason": exit_reason, "gross_pnl_inr": round(gross, 2),
