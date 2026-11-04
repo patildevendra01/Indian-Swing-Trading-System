@@ -16,7 +16,7 @@ class TradePathResearchTests(unittest.TestCase):
             "mfe_r": [0.2, 2.1, 0.8],
             "mae_r": [-1.1, -0.3, -0.6],
             "best_close_r": [0.1, 1.9, 0.6],
-            "exit_close_r": [-1.0, 1.7, 0.2],
+            "exit_fill_r": [-1.0, 1.7, 0.2],
         })
 
     def test_period_summary_counts_and_thresholds(self):
