@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 REQUIRED = {"period", "exit_reason", "net_pnl_inr", "net_r_multiple",
-            "holding_sessions", "mfe_r", "mae_r", "best_close_r", "exit_close_r"}
+            "holding_sessions", "mfe_r", "mae_r", "best_close_r", "exit_fill_r"}
 
 
 def load(path):
@@ -21,7 +21,7 @@ def load(path):
             ". Pull the latest research branch and rerun the backtest."
         )
     for col in ("net_pnl_inr", "net_r_multiple", "holding_sessions",
-                "mfe_r", "mae_r", "best_close_r", "exit_close_r"):
+                "mfe_r", "mae_r", "best_close_r", "exit_fill_r"):
         df[col] = pd.to_numeric(df[col], errors="coerce")
     return df.dropna(subset=["period", "exit_reason", "mfe_r", "mae_r"]).copy()
 
@@ -40,7 +40,7 @@ def summarize_paths(df):
             "share_mfe_ge_1_5r_pct": round((g.mfe_r >= 1.5).mean() * 100, 2),
             "avg_mae_r": round(g.mae_r.mean(), 3),
             "avg_best_close_r": round(g.best_close_r.mean(), 3),
-            "avg_exit_close_r": round(g.exit_close_r.mean(), 3),
+            "avg_exit_fill_r": round(g.exit_fill_r.mean(), 3),
             "avg_holding_sessions": round(g.holding_sessions.mean(), 2),
         })
     return pd.DataFrame(rows)
@@ -58,7 +58,7 @@ def summarize_periods(df):
             "share_mfe_ge_1_5r_pct": round((g.mfe_r >= 1.5).mean() * 100, 2),
             "avg_mae_r": round(g.mae_r.mean(), 3),
             "avg_best_close_r": round(g.best_close_r.mean(), 3),
-            "avg_exit_close_r": round(g.exit_close_r.mean(), 3),
+            "avg_exit_fill_r": round(g.exit_fill_r.mean(), 3),
         })
     return pd.DataFrame(rows)
 
@@ -74,7 +74,7 @@ def render(periods, paths):
         "- MAE R: lowest daily low from entry through exit, measured in the same risk units; negative values are adverse.",
         "- Best-close R: highest daily close through exit; exit-close R: exit-session close, not necessarily the executed exit price.",
         "- Daily OHLC bars do not reveal the intraday order of highs and lows. Excursions on a stop/target day are not proof that an intraday target was executable before a stop.",
-        "- MFE/MAE include the exit session and are descriptive, not a simulation of alternative exits.",
+        "- MFE/MAE include the exit session while the position is considered open; for opening-gap exits only the opening price is counted, not later same-day highs/lows.",
         "- Do not select thresholds from the out-of-sample period. Use development results to form a pre-specified hypothesis, then validate on a fresh untouched holdout.",
         "- Existing entry, stop, target, position sizing, filters, and paper-only policy remain unchanged.", ""
     ])
