@@ -123,10 +123,17 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
         for j in range(entry_idx, last_j + 1):
             bar = df.iloc[j]
             op, hi, lo, cl = map(float, (bar["Open"], bar["High"], bar["Low"], bar["Close"]))
-            path_max_high = max(path_max_high, hi)
-            path_min_low = min(path_min_low, lo)
-            path_max_close = max(path_max_close, cl)
             exit_price, exit_reason = classify_exit(op, hi, lo, stop, target)
+            # A gap exit is executed at the open; do not count later same-day
+            # highs/lows as if the position were still held.
+            if exit_reason in ("stop_gap", "target_gap"):
+                path_max_high = max(path_max_high, op)
+                path_min_low = min(path_min_low, op)
+                path_max_close = max(path_max_close, op)
+            else:
+                path_max_high = max(path_max_high, hi)
+                path_min_low = min(path_min_low, lo)
+                path_max_close = max(path_max_close, cl)
             if exit_price is None and j == last_j and intended_last_j < len(df):
                 exit_price, exit_reason = cl, "time_exit"
             if exit_price is not None:
