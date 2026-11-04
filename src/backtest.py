@@ -149,11 +149,12 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
         hold_sessions = exit_idx - entry_idx + 1
         initial_stop_distance = entry - stop
         signal_atr = float(row["atr"])
-        # Excursions use the full daily-bar range through the exit session.
-        # They are descriptive diagnostics, not executable intraday fill estimates.
+        # Excursions use daily bars only while the position is open. Intraday
+        # high/low ordering remains unknowable from OHLC data.
         mfe_r = (path_max_high - entry) / initial_stop_distance
         mae_r = (path_min_low - entry) / initial_stop_distance
-        best_close_r = (path_max_close - entry) / initial_stop_distance
+        best_close_r = ((path_max_close - entry) / initial_stop_distance
+                        if path_max_close > -float("inf") else None)
         exit_fill_r = (exit_price - entry) / initial_stop_distance
         trades.append({
             "symbol": symbol, "signal_date": str(df.index[i].date()),
@@ -164,7 +165,8 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
             "entry_stop_distance_pct": round(initial_stop_distance / entry * 100, 4),
             "stop_distance_vs_signal_atr": round(initial_stop_distance / signal_atr, 4) if signal_atr else None,
             "mfe_r": round(mfe_r, 3), "mae_r": round(mae_r, 3),
-            "best_close_r": round(best_close_r, 3), "exit_fill_r": round(exit_fill_r, 3),
+            "best_close_r": round(best_close_r, 3) if best_close_r is not None else None,
+            "exit_fill_r": round(exit_fill_r, 3),
             "entry": round(entry, 2), "stop": round(stop, 2), "target": round(target, 2),
             "exit": round(exit_price, 2), "quantity": qty, "holding_sessions": hold_sessions,
             "exit_reason": exit_reason, "gross_pnl_inr": round(gross, 2),
