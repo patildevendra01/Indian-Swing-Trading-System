@@ -76,3 +76,24 @@ Outputs:
 - `trade_path_by_exit.csv`: excursion metrics split by stop, target, and time exits.
 
 MFE/MAE use daily high/low values through the exit session and are not executable intraday paths. In particular, a daily bar cannot establish whether a target was reached before a stop on the same session. These fields are descriptive only; no entry, stop, target, sizing, filter, or scanner rule is changed.
+
+
+## Phase 5: close-based profit-protection experiment
+
+Run after the baseline backtest has populated the local OHLCV snapshot:
+
+```bash
+python -m src.time_exit_research --config config.yaml --data-dir backtest_data
+```
+
+Candidate rule:
+- A completed daily close at or above +1R arms protection.
+- After arming, a later completed daily close below +0.5R schedules an exit at the next session open.
+- If no next session exists within the original maximum holding window, the baseline time exit is retained.
+- Original entries, initial stops, 2R targets, sizing, gap rejection, costs, and maximum holding period remain unchanged.
+
+Outputs:
+- `profit_protection_candidate_trades.csv`
+- `profit_protection_research_report.md`
+
+This is a research-only variant. Compare its development-period result with the baseline result on the same cached data. Do not tune the rule against the OOS period or treat a better historical result as proof of future profitability. The baseline backtest and production scanner are untouched.
