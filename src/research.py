@@ -65,9 +65,9 @@ def build_report(frame: pd.DataFrame) -> str:
         "## Results by period",
     ]
     by_period = grouped_summary(frame, ["period"])
-    lines += ["", by_period.to_markdown(index=False), "", "## Results by exit reason and period"]
+    lines += ["", by_period.to_string(index=False), "", "## Results by exit reason and period"]
     by_exit = grouped_summary(frame, ["period", "exit_reason"])
-    lines += ["", by_exit.to_markdown(index=False), "", "## Holding-duration buckets"]
+    lines += ["", by_exit.to_string(index=False), "", "## Holding-duration buckets"]
     bins = [0, 1, 3, 5, 7, 10, float("inf")]
     labels = ["1", "2-3", "4-5", "6-7", "8-10", "11+"]
     temp = frame.copy()
@@ -75,7 +75,7 @@ def build_report(frame: pd.DataFrame) -> str:
         temp["holding_sessions"], bins=bins, labels=labels, include_lowest=True
     )
     by_hold = grouped_summary(temp, ["period", "holding_bucket"])
-    lines += ["", by_hold.to_markdown(index=False), "", "## Symbol results (minimum 5 trades)"]
+    lines += ["", by_hold.to_string(index=False), "", "## Symbol results (minimum 5 trades)"]
     symbol_counts = frame.groupby(["period", "symbol"]).size().rename("sample_trades")
     eligible = symbol_counts[symbol_counts >= 5].index
     symbol_frame = frame.set_index(["period", "symbol"]).loc[
@@ -85,7 +85,7 @@ def build_report(frame: pd.DataFrame) -> str:
     if by_symbol.empty:
         lines += ["", "No symbol-period group had at least five trades."]
     else:
-        lines += ["", by_symbol.sort_values(["period", "net_pnl_inr"]).to_markdown(index=False)]
+        lines += ["", by_symbol.sort_values(["period", "net_pnl_inr"]).to_string(index=False)]
     lines += [
         "",
         "## Interpretation safeguards",
