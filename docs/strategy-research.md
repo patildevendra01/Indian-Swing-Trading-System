@@ -61,3 +61,18 @@ Outputs:
 - `stop_exit_types.csv`: P&L split by stop exit reason.
 
 This only adds diagnostic fields to completed trade records. It does not change the entry, stop, target, position sizing, filters, or scanner. Existing `backtest_trades.csv` files do not contain the new fields and must be regenerated.
+
+## Phase 4: trade-path excursion diagnostics
+
+After pulling the latest research branch, regenerate `backtest_trades.csv` so each completed trade includes MFE, MAE, best-close R, and exit-close R diagnostics. Then run:
+
+```bash
+python -m src.trade_path_research --input backtest_trades.csv
+```
+
+Outputs:
+- `trade_path_research_report.md`: period and exit-reason summaries.
+- `trade_path_by_period.csv`: aggregate excursion metrics by chronological period.
+- `trade_path_by_exit.csv`: excursion metrics split by stop, target, and time exits.
+
+MFE/MAE use daily high/low values through the exit session and are not executable intraday paths. In particular, a daily bar cannot establish whether a target was reached before a stop on the same session. These fields are descriptive only; no entry, stop, target, sizing, filter, or scanner rule is changed.
