@@ -49,7 +49,7 @@ def cost_sensitivity(frame, scenarios):
         idx = group.index
         for cost_bps, slippage_bps in scenarios:
             pnl = (raw_move.loc[idx]
-                   - turnover.loc[idx] * (cost_bps + 2 * slippage_bps) / 10000)
+                   - turnover.loc[idx] * (cost_bps + slippage_bps) / 10000)
             rows.append({
                 "period": period, "cost_bps_per_side": cost_bps,
                 "slippage_bps_per_side": slippage_bps, "trades": len(group),
@@ -138,7 +138,7 @@ def build_report(costs, portfolio, initial_capital, risk_pct, max_position_pct, 
         "",
         costs.to_string(index=False),
         "",
-        "Cost and slippage are applied per side to entry/exit turnover. These are scenarios,",
+        "Cost and slippage basis points are applied to the combined entry-plus-exit turnover, matching the baseline backtest's entry and exit slippage model. These are scenarios,",
         "not claims about the exact fees charged by a particular broker or exchange.",
         "",
         "## Approximate constrained portfolio reconstruction",
