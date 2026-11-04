@@ -18,3 +18,14 @@ Optional assumptions: `--cost-bps 20 --slippage-bps 5 --max-gap-pct 2.5`. These 
 This is an exploratory sanity-check, not evidence of a tradable edge. Historical adjusted data can be incomplete; current watchlists create survivorship bias; the scanner does not include delisted stocks. The default 5-year window is not a substitute for multiple market regimes. Do not optimize parameters on the same period used to report performance.
 
 Before any live use, add point-in-time constituents, corporate-action handling, a portfolio-level cash/risk engine, realistic broker/exchange charges, out-of-sample and walk-forward validation, and paper-trade reconciliation. A backtest cannot guarantee future results.
+
+
+## Walk-forward and benchmark report
+
+The backtest now divides the downloaded history chronologically: the first three calendar years are reported as a development period and the following two years as an out-of-sample holdout. The strategy rules are held fixed in both periods; this is a chronological validation split, not parameter optimization. Each period is simulated separately, so positions do not cross the split boundary and each symbol/period starts with the configured capital for sizing.
+
+For each period, the console reports per-filter pass/fail counts after the EMA warm-up, raw qualifying signals, completed trades, gap/risk rejections, and truncated positions. This helps identify which condition is limiting signal frequency. A signal is counted only where a following session exists for next-open execution.
+
+The script also retrieves the NIFTY 50 price-index return over the out-of-sample date range. This is a market reference only: it excludes dividends and is not directly comparable to the sum of independent single-stock trade P&L.
+
+Important caveats: the 3y/2y split is based on the earliest downloaded symbol history; symbol histories can start/end on different dates. A fixed ruleset avoids tuning on the holdout, but the first three years have not been parameter-optimized. The strategy report is not a combined portfolio return. Drawdown is calculated on sequential completed-trade P&L, not daily marked-to-market equity, and exposure is a rough sum across independent symbol simulations.
