@@ -97,3 +97,27 @@ Outputs:
 - `profit_protection_research_report.md`
 
 This is a research-only variant. Compare its development-period result with the baseline result on the same cached data. Do not tune the rule against the OOS period or treat a better historical result as proof of future profitability. The baseline backtest and production scanner are untouched.
+
+
+## Phase 6: NIFTY 50 market-regime study
+
+Run after the baseline backtest has created `backtest_trades.csv` and
+`backtest_data/`:
+
+```bash
+python -m src.market_regime_research --input backtest_trades.csv --data-dir backtest_data --config config.yaml
+```
+
+The study tags each trade using NIFTY 50's latest available close on or before
+its signal date. It reports above/below EMA50 and a four-state split that also
+considers whether EMA50 is rising versus 20 prior trading observations.
+
+Outputs:
+- `market_regime_tagged_trades.csv`
+- `market_regime_cohort_summary.csv`
+- `market_regime_research_report.md`
+
+These are descriptive cohorts of existing baseline trades, not a portfolio
+re-simulation with a market filter. Use development results only to form a
+single pre-specified hypothesis. OOS results are descriptive and must not be
+used to select or tune a filter. No production rules are changed.
