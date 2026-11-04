@@ -79,7 +79,10 @@ python -m unittest discover -s tests -v
 
 Backtest assumptions and important limitations are documented in [docs/backtesting.md](docs/backtesting.md). The GitHub Actions workflow runs the unit tests on pushes and pull requests.
 
-## Project layout
+
+
+The backtest reports filter pass/fail counts and uses a chronological first-3-years development / next-2-years out-of-sample split with fixed rules. It also fetches the NIFTY 50 price-index return for the out-of-sample window as a market reference. See [docs/backtesting.md](docs/backtesting.md) for interpretation and limitations; this is not a portfolio-equivalent benchmark.
+\n## Project layout
 
 - `config.example.yaml` — editable defaults and watchlist
 - `src/indicators.py` — technical indicators
