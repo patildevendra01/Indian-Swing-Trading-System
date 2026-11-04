@@ -27,6 +27,13 @@ class RobustnessResearchTests(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertLess(result.iloc[1]["net_pnl_inr"], result.iloc[0]["net_pnl_inr"])
 
+    def test_cost_sensitivity_matches_one_entry_and_one_exit_slippage(self):
+        frame = trades().iloc[:1]
+        result = cost_sensitivity(frame, [(20, 5)])
+        # Raw gain ₹100; combined turnover ₹2,100; total modeled drag 25 bps.
+        expected = 100.0 - 2100.0 * 25 / 10000
+        self.assertAlmostEqual(result.iloc[0]["net_pnl_inr"], expected, places=2)
+
     def test_portfolio_respects_max_open_positions(self):
         result = reconstruct_portfolio(trades(), initial_capital=15000,
             risk_pct=0.5, max_position_pct=25, max_positions=2, cost_bps=0, slippage_bps=0)
