@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 import pandas as pd
 from src.trade_path_research import load, summarize_paths, summarize_periods
 
@@ -31,8 +33,11 @@ class TradePathResearchTests(unittest.TestCase):
         self.assertEqual(stop["avg_mfe_r"], 0.2)
 
     def test_load_requires_path_columns(self):
-        with self.assertRaises(ValueError):
-            load("/path/that/does/not/exist.csv")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "trades.csv"
+            pd.DataFrame({"period": ["development_3y"]}).to_csv(path, index=False)
+            with self.assertRaises(ValueError):
+                load(path)
 
 
 if __name__ == "__main__":
