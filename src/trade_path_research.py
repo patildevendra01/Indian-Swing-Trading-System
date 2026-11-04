@@ -72,7 +72,7 @@ def render(periods, paths):
         "", "## Definitions and safeguards", "",
         "- MFE R: highest daily high from entry through exit, measured in initial entry-to-stop risk units.",
         "- MAE R: lowest daily low from entry through exit, measured in the same risk units; negative values are adverse.",
-        "- Best-close R: highest daily close through exit; exit-close R: exit-session close, not necessarily the executed exit price.",
+        "- Best-close R: highest daily close while the position remained open; it is blank when a gap exit occurs at the entry open. Exit-fill R: simulated exit price in initial-risk units.",
         "- Daily OHLC bars do not reveal the intraday order of highs and lows. Excursions on a stop/target day are not proof that an intraday target was executable before a stop.",
         "- MFE/MAE include the exit session while the position is considered open; for opening-gap exits only the opening price is counted, not later same-day highs/lows.",
         "- Do not select thresholds from the out-of-sample period. Use development results to form a pre-specified hypothesis, then validate on a fresh untouched holdout.",
