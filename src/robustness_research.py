@@ -77,7 +77,14 @@ def reconstruct_portfolio(frame, initial_capital=15000.0, risk_pct=0.5,
         accepted_pnl = []
         rejected_slots = rejected_cash = rejected_risk = 0
         for row in group.sort_values(["entry_date", "symbol"]).itertuples():
-            active = [p for p in active if p["exit_date"] >= row.entry_date]
+            # Realize only positions that exited strictly before this entry date.
+            still_active = []
+            for position in active:
+                if position["exit_date"] < row.entry_date:
+                    equity += position["pnl"]
+                else:
+                    still_active.append(position)
+            active = still_active
             if len(active) >= int(max_positions):
                 rejected_slots += 1
                 continue
@@ -104,9 +111,8 @@ def reconstruct_portfolio(frame, initial_capital=15000.0, risk_pct=0.5,
             slippage = turnover * 2 * slippage_bps / 10000.0
             pnl = raw_pnl - costs - slippage
             position_value = float(row.entry) * qty
-            active.append({"exit_date": row.exit_date, "position_value": position_value})
+            active.append({"exit_date": row.exit_date, "position_value": position_value, "pnl": pnl})
             accepted_pnl.append(pnl)
-            equity += pnl
         series = pd.Series(accepted_pnl, dtype=float)
         out.append({
             "period": period, "starting_capital_inr": round(initial_capital, 2),
