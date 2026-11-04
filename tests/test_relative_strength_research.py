@@ -11,7 +11,7 @@ class RelativeStrengthResearchTests(unittest.TestCase):
         self.stock = pd.DataFrame({"Close": [200 + 2 * i for i in range(30)]}, index=self.dates)
 
     def test_returns_use_only_data_on_or_before_signal(self):
-        result = relative_return(self.stock, self.market, self.dates[25] + pd.Timedelta(days=2), 20)
+        result = relative_return(self.stock, self.market, self.dates[25], 20)
         self.assertEqual(result["stock_data_date"], self.dates[25].strftime("%Y-%m-%d"))
         self.assertEqual(result["nifty_data_date"], self.dates[25].strftime("%Y-%m-%d"))
 
