@@ -32,9 +32,8 @@ def qualifying_frame(periods=104):
     # Only bar 100 is a signal; the next three sessions are the holding window.
     data.loc[data.index[100], "Close"] = 100.0
     data.loc[data.index[100], "prior_high"] = 99.0
-    data.loc[data.index[101], ["Open", "High", "Low", "Close"]] = [100, 101, 99, 100]
-    data.loc[data.index[102], ["Open", "High", "Low", "Close"]] = [100, 101, 99, 100]
-    data.loc[data.index[103], ["Open", "High", "Low", "Close"]] = [100, 101, 99, 100]
+    for bar in range(101, min(104, periods)):
+        data.loc[data.index[bar], ["Open", "High", "Low", "Close"]] = [100, 101, 99, 100]
     return data
 
 
