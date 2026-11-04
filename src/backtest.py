@@ -56,7 +56,7 @@ def count_filter_passes(frame: pd.DataFrame, cfg: dict) -> dict:
     counts = {f"{name}_{side}": 0 for name in FILTER_NAMES for side in ("pass", "fail")}
     counts["bars_evaluated"] = 0
     counts["raw_signals"] = 0
-    for _, row in frame.iloc[warmup:].iterrows():
+    for _, row in frame.iloc[warmup:-1].iterrows():
         if not all(pd.notna(row.get(k)) for k in ("Close", "ema_fast", "ema_slow", "rsi", "atr_pct")):
             continue
         checks = _filter_checks(row, st)
