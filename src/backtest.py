@@ -1,5 +1,8 @@
 """Conservative daily-bar backtester with a chronological 3y/2y walk-forward report."""
 import argparse
+import hashlib
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
@@ -20,6 +23,42 @@ except ImportError:
 
 
 FILTER_NAMES = ("trend", "momentum", "volume", "breakout", "price", "turnover", "volatility")
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_or_download_history(ticker: str, cache_dir: str | Path, period: str = "5y",
+                             refresh: bool = False) -> tuple[pd.DataFrame, dict]:
+    """Load an immutable local OHLCV snapshot, or download and persist one."""
+    cache = Path(cache_dir)
+    cache.mkdir(parents=True, exist_ok=True)
+    safe_ticker = ticker.replace("^", "INDEX_").replace("/", "_").replace(".", "_")
+    csv_path = cache / f"{safe_ticker}.csv"
+    if csv_path.exists() and not refresh:
+        frame = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+        frame.index = pd.to_datetime(frame.index)
+        return frame, {"source": "cache", "path": str(csv_path),
+                       "sha256": _sha256(csv_path), "rows": len(frame)}
+    frame = yf.download(ticker, period=period, interval="1d", auto_adjust=True,
+                        progress=False, threads=False)
+    if frame.empty:
+        return frame, {"source": "download_empty", "ticker": ticker}
+    if isinstance(frame.columns, pd.MultiIndex):
+        frame.columns = frame.columns.get_level_values(0)
+    frame.index.name = "Date"
+    frame.to_csv(csv_path, float_format="%.10g")
+    metadata = {"source": "download", "ticker": ticker, "period": period,
+                "auto_adjust": True, "downloaded_at_utc": datetime.now(timezone.utc).isoformat(),
+                "rows": len(frame), "first_date": str(frame.index.min()),
+                "last_date": str(frame.index.max()), "sha256": _sha256(csv_path),
+                "file": csv_path.name}
+    return frame, metadata
 
 
 def classify_exit(op: float, hi: float, lo: float, stop: float, target: float):
@@ -241,6 +280,8 @@ def main():
     parser.add_argument("--cost-bps", type=float, default=None)
     parser.add_argument("--slippage-bps", type=float, default=None)
     parser.add_argument("--max-gap-pct", type=float, default=None)
+    parser.add_argument("--data-dir", default="backtest_data", help="Local OHLCV snapshot directory")
+    parser.add_argument("--refresh-data", action="store_true", help="Replace cached snapshots with fresh Yahoo Finance data")
     args = parser.parse_args()
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -252,6 +293,7 @@ def main():
         parser.error("cost, slippage and gap limits must be non-negative")
 
     downloaded = {}
+    data_manifest = {"created_at_utc": datetime.now(timezone.utc).isoformat(), "provider": "Yahoo Finance via yfinance", "auto_adjust": True, "symbols": {}}
     all_trades = {"development_3y": [], "out_of_sample_2y": []}
     aggregate = {p: {"signals": {f"{n}_{s}": 0 for n in FILTER_NAMES for s in ("pass", "fail")},
                      "signals_extra": {"bars_evaluated": 0, "raw_signals": 0},
@@ -260,13 +302,13 @@ def main():
     for symbol in cfg.get("watchlist", []):
         try:
             ticker = yahoo_symbol(symbol, cfg["market"].get("exchange", "NSE"))
-            raw = yf.download(ticker, period=bt.get("history_period", "5y"), interval="1d",
-                              auto_adjust=True, progress=False, threads=False)
+            raw, source_info = load_or_download_history(
+                ticker, args.data_dir, bt.get("history_period", "5y"), refresh=args.refresh_data)
             if raw.empty:
                 print(f"{symbol}: no data")
+                data_manifest["symbols"][symbol] = source_info
                 continue
-            if isinstance(raw.columns, pd.MultiIndex):
-                raw.columns = raw.columns.get_level_values(0)
+            data_manifest["symbols"][symbol] = source_info
             data = add_indicators(raw, cfg["strategy"]["ema_fast"], cfg["strategy"]["ema_slow"],
                                   cfg["strategy"]["rsi_period"], cfg["strategy"]["atr_period"],
                                   cfg["strategy"]["volume_lookback"], cfg["strategy"]["breakout_lookback"])
@@ -274,6 +316,9 @@ def main():
         except Exception as exc:
             print(f"{symbol}: ERROR — {exc}")
 
+    manifest_path = Path(args.data_dir) / "backtest_data_manifest.json"
+    manifest_path.write_text(json.dumps(data_manifest, indent=2), encoding="utf-8")
+    print(f"Data manifest saved to {manifest_path}; cached data will be reused unless --refresh-data is set.")
     if not downloaded:
         print("No symbol data downloaded.")
         return
