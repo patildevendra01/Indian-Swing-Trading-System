@@ -29,3 +29,15 @@ For each period, the console reports per-filter pass/fail counts after the EMA w
 The script also retrieves the NIFTY 50 price-index return over the out-of-sample date range. This is a market reference only: it excludes dividends and is not directly comparable to the sum of independent single-stock trade P&L.
 
 Important caveats: the 3y/2y split is based on the earliest downloaded symbol history; symbol histories can start/end on different dates. A fixed ruleset avoids tuning on the holdout, but the first three years have not been parameter-optimized. The strategy report is not a combined portfolio return. Drawdown is calculated on sequential completed-trade P&L, not daily marked-to-market equity, and exposure is a rough sum across independent symbol simulations.
+
+
+## Reproducible OHLCV snapshots
+
+The backtest stores each downloaded, auto-adjusted daily OHLCV series as a local CSV in `backtest_data/`. Later runs reuse these exact files rather than silently downloading revised history. A `backtest_data_manifest.json` records each symbol, source, date range, row count, download timestamp and SHA-256 checksum. The cache is local and ignored by Git; keep a copy of the folder with each research run if you need to reproduce it on another runtime.
+
+- First run: `python -m src.backtest --config config.yaml` downloads missing snapshots.
+- Repeat run: same command reuses the snapshots.
+- Explicit refresh: `python -m src.backtest --config config.yaml --refresh-data` replaces cached files with current Yahoo Finance data.
+- Alternate cache: `python -m src.backtest --config config.yaml --data-dir my_snapshot`.
+
+Do not use `--refresh-data` when trying to reproduce an earlier result. Refreshing changes the dataset and therefore may change signals and trades. The cache improves reproducibility but does not make Yahoo Finance exchange-authoritative or guarantee point-in-time corporate-action accuracy.
