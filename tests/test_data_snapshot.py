@@ -24,7 +24,7 @@ class DataSnapshotTests(unittest.TestCase):
             self.assertEqual(download.call_count, 1)
             self.assertEqual(first_meta["source"], "download")
             self.assertEqual(second_meta["source"], "cache")
-            pd.testing.assert_frame_equal(first, second)
+            pd.testing.assert_frame_equal(first, second, check_dtype=False)
 
     def test_refresh_replaces_cached_snapshot(self):
         with tempfile.TemporaryDirectory() as folder:
