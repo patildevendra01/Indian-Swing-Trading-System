@@ -163,3 +163,21 @@ Outputs:
 - `robustness_research_report.md`: combined results and limitations.
 
 The portfolio reconstruction is intentionally labelled approximate: it only has completed trades from independent per-symbol simulations, not all candidate signals or rejected entries. It re-sizes recorded trades chronologically and cannot reproduce a true daily portfolio or signal-ranking process. Treat it as a diagnostic lower-fidelity estimate, not validation or a forecast. No baseline scanner, backtest, or strategy parameters are changed; paper-only remains in force.
+
+
+## Phase 9: chronological trade-close drawdown and exposure diagnostics
+
+The baseline report now:
+- Aggregates all completed-trade P&L by exit date before updating equity, making the
+  realised trade-close drawdown independent of CSV row order and same-day trade ordering.
+- Includes starting capital as the initial equity peak.
+- Uses the union of available symbol trading dates for each period to estimate
+  concurrent open positions and invested capital from entry date through exit date,
+  inclusive.
+- Reports average and maximum concurrent positions, percentage of sessions with
+  positions open, and average invested capital as a percentage of realised equity.
+
+These remain diagnostics over independent single-symbol simulations, not a true
+shared-capital portfolio. They do not mark positions to market daily, model cash
+constraints, or represent intraday drawdown. Exposure can exceed shared-portfolio
+limits and must not be interpreted as executable portfolio utilisation.
