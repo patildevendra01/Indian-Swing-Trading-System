@@ -34,6 +34,14 @@ class RobustnessResearchTests(unittest.TestCase):
         expected = 100.0 - 2100.0 * 25 / 10000
         self.assertAlmostEqual(result.iloc[0]["net_pnl_inr"], expected, places=2)
 
+    def test_portfolio_applies_slippage_once_to_entry_plus_exit_turnover(self):
+        result = reconstruct_portfolio(
+            trades().iloc[:1], initial_capital=15000, risk_pct=0.5,
+            max_position_pct=25, max_positions=3, cost_bps=0, slippage_bps=5
+        )
+        # Quantity is 15; raw gain ₹150; turnover ₹3,150; 5 bps drag = ₹1.575.
+        self.assertAlmostEqual(result.iloc[0]["net_pnl_inr"], 148.43, places=2)
+
     def test_portfolio_respects_max_open_positions(self):
         result = reconstruct_portfolio(trades(), initial_capital=15000,
             risk_pct=0.5, max_position_pct=25, max_positions=2, cost_bps=0, slippage_bps=0)
