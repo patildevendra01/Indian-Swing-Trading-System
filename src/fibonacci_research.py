@@ -106,8 +106,8 @@ def fib_levels(swing_low, swing_high):
     low, high = float(swing_low), float(swing_high)
     if not np.isfinite(low) or not np.isfinite(high) or low <= 0 or high <= low:
         raise ValueError("Require positive swing_low < swing_high")
-    return {f"fib_{int(round(ratio * 1000)):04d}": high - ratio * (high - low)
-            for ratio in FIB_LEVELS}
+    return {name: high - ratio * (high - low)
+            for name, ratio in SETUP_COLUMNS.items()}
 
 
 def tag_trade(trade, history, tolerance_pct=1.0, left_bars=3, right_bars=3):
