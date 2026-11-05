@@ -76,6 +76,7 @@ def replay_portfolio(trades, cfg, cost_model, slippage_bps=5.0):
     for (period, setup), group in work.groupby(["period", "setup"], sort=True):
         cash = initial_capital
         open_positions = []
+        peak_open_positions = 0
         accepted = []
         rejected = []
 
@@ -142,6 +143,7 @@ def replay_portfolio(trades, cfg, cost_model, slippage_bps=5.0):
                             "entry_notional": entry_notional,
                             "net_pnl_inr": net_pnl,
                         })
+                        peak_open_positions = max(peak_open_positions, len(open_positions))
                         cash -= entry_notional
                         continue
 
@@ -182,7 +184,7 @@ def replay_portfolio(trades, cfg, cost_model, slippage_bps=5.0):
                     if gross_loss else (float("inf") if gross_profit else 0.0),
                 "average_r": round(float(r_values.mean()), 3) if len(r_values) else None,
                 "max_realized_drawdown_pct": round(float(drawdown.min()), 2),
-                "max_concurrent_positions": max_positions if False else None,
+                "max_concurrent_positions": peak_open_positions,
                 "starting_capital_inr": initial_capital,
                 "risk_budget_per_entry_inr": round(risk_budget, 2),
                 "max_position_value_inr": round(max_position_value, 2),
