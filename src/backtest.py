@@ -16,12 +16,14 @@ try:
     from .risk import build_trade_plan
     from .scan import yahoo_symbol
     from .metrics import chronological_trade_metrics
+    from .costs import load_cost_model
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from src.indicators import add_indicators
     from src.risk import build_trade_plan
     from src.scan import yahoo_symbol
     from src.metrics import chronological_trade_metrics
+    from src.costs import load_cost_model
 
 
 FILTER_NAMES = ("trend", "momentum", "volume", "breakout", "price", "turnover", "volatility")
@@ -117,7 +119,7 @@ def count_filter_passes(frame: pd.DataFrame, cfg: dict,
 def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
                     cost_bps: float = 20.0, slippage_bps: float = 5.0,
                     max_gap_pct: float = 2.5, signal_start=None,
-                    signal_end=None) -> tuple[list[dict], dict]:
+                    signal_end=None, cost_model=None) -> tuple[list[dict], dict]:
     """Run fixed rules on full history, taking signals only inside the requested window."""
     market, account, st = cfg["market"], cfg["account"], cfg["strategy"]
     df = frame.copy()
@@ -197,7 +199,10 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
         entry_slip, exit_slip = entry * slippage_bps / 10000, exit_price * slippage_bps / 10000
         effective_entry, effective_exit = entry + entry_slip, exit_price - exit_slip
         gross = (effective_exit - effective_entry) * qty
-        costs = (entry * qty + exit_price * qty) * cost_bps / 10000
+        charge_details = (cost_model.calculate(entry, exit_price, qty)
+                          if cost_model is not None else None)
+        costs = (charge_details["total_charges_inr"] if charge_details is not None
+                 else (entry * qty + exit_price * qty) * cost_bps / 10000)
         net = gross - costs
         hold_sessions = exit_idx - entry_idx + 1
         initial_stop_distance = entry - stop
@@ -224,6 +229,8 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
             "exit": round(exit_price, 2), "quantity": qty, "holding_sessions": hold_sessions,
             "exit_reason": exit_reason, "gross_pnl_inr": round(gross, 2),
             "estimated_costs_inr": round(costs, 2), "net_pnl_inr": round(net, 2),
+            **({key: value for key, value in charge_details.items()
+                if key != "total_charges_inr"} if charge_details is not None else {}),
             "planned_risk_inr": round(plan.planned_risk_inr, 2),
             "net_r_multiple": round(net / plan.planned_risk_inr, 3) if plan.planned_risk_inr else None,
         })
@@ -292,6 +299,10 @@ def main():
     parser.add_argument("--cost-bps", type=float, default=None)
     parser.add_argument("--slippage-bps", type=float, default=None)
     parser.add_argument("--max-gap-pct", type=float, default=None)
+    parser.add_argument("--cost-model", choices=("legacy_flat_bps", "religare_basic_estimate"),
+                        default="legacy_flat_bps",
+                        help="Explicit delivery fee model; legacy_flat_bps preserves the original baseline")
+    parser.add_argument("--cost-model-file", default="config/cost_models.example.yaml")
     parser.add_argument("--data-dir", default="backtest_data", help="Local OHLCV snapshot directory")
     parser.add_argument("--refresh-data", action="store_true", help="Replace cached snapshots with fresh Yahoo Finance data")
     args = parser.parse_args()
@@ -303,6 +314,8 @@ def main():
     max_gap_pct = bt.get("max_gap_pct", 2.5) if args.max_gap_pct is None else args.max_gap_pct
     if min(cost_bps, slippage_bps, max_gap_pct) < 0:
         parser.error("cost, slippage and gap limits must be non-negative")
+    selected_cost_model = (None if args.cost_model == "legacy_flat_bps"
+                           else load_cost_model(args.cost_model_file, args.cost_model))
 
     downloaded = {}
     data_manifest = {"created_at_utc": datetime.now(timezone.utc).isoformat(), "provider": "Yahoo Finance via yfinance", "auto_adjust": True, "symbols": {}}
@@ -353,7 +366,7 @@ def main():
             trades, diag = simulate_symbol(
                 data, yahoo_symbol(symbol, cfg["market"].get("exchange", "NSE")),
                 cfg, cost_bps, slippage_bps, max_gap_pct,
-                signal_start=start, signal_end=end)
+                signal_start=start, signal_end=end, cost_model=selected_cost_model)
             counts = count_filter_passes(data, cfg, signal_start=start, signal_end=end)
             all_trades[label].extend([{**t, "period": label} for t in trades])
             for k in aggregate[label]["signals"]:
@@ -391,6 +404,9 @@ def main():
     else:
         print(f"NIFTY 50 buy-and-hold price return over out-of-sample dates: {benchmark:.2f}% "
               "(dividends excluded; compare as a market reference, not a portfolio-equivalent return).")
+    print(f"\nCost model: {args.cost_model}" +
+          (" (brokerage/statutory/DP estimates; slippage remains separate)." if selected_cost_model else
+           f" (legacy {cost_bps:g} bps per side; slippage {slippage_bps:g} bps per side)."))
     print("\nLimitations: independent single-symbol simulations, not a portfolio; trade-close drawdown, "
           "rough aggregate exposure, current-watchlist survivorship bias, and simplified costs. "
           "No live execution or investment advice.")
