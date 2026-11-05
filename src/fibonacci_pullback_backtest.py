@@ -15,7 +15,7 @@ import yaml
 try:
     from .backtest import classify_exit, load_or_download_history
     from .costs import load_cost_model
-    from .fibonnaci_research import confirmed_pivots
+    from .fibonacci_research import confirmed_pivots
     from .risk import build_trade_plan
     from .scan import yahoo_symbol
 except ImportError:
