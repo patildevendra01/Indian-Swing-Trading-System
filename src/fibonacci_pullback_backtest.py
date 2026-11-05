@@ -97,6 +97,7 @@ def simulate_fibonacci_symbol(frame, symbol, cfg, ratio_name, ratio,
     atr = tr.ewm(alpha=1 / atr_period, adjust=False).mean()
 
     trades = []
+    last_traded_impulse_high = None
     i = 100
     while i < len(data) - 1:
         date = data.index[i]
@@ -106,7 +107,8 @@ def simulate_fibonacci_symbol(frame, symbol, cfg, ratio_name, ratio,
         if signal_end is not None and date >= pd.Timestamp(signal_end):
             break
         leg = latest_confirmed_uptrend_leg(pivots, i)
-        if leg is None or i - leg["confirmed_index"] > max_wait_bars:
+        if (leg is None or i - leg["confirmed_index"] > max_wait_bars
+                or leg["high_index"] == last_traded_impulse_high):
             i += 1
             continue
         span = leg["swing_high"] - leg["swing_low"]
@@ -130,6 +132,11 @@ def simulate_fibonacci_symbol(frame, symbol, cfg, ratio_name, ratio,
             i += 1
             continue
         stop = leg["swing_low"] - 0.25 * signal_atr
+        # Reject a setup if the proposed protective stop was already crossed
+        # on the confirmation candle before the next-session entry.
+        if lo <= stop:
+            i += 1
+            continue
         effective_entry = raw_entry * (1.0 + slippage_bps / 10000.0)
         try:
             plan = build_trade_plan(effective_entry, stop, capital, risk_pct,
@@ -180,6 +187,7 @@ def simulate_fibonacci_symbol(frame, symbol, cfg, ratio_name, ratio,
             **{k: v for k, v in charges.items() if k != "total_charges_inr"},
         })
         capital += net
+        last_traded_impulse_high = leg["high_index"]
         # One position at a time per symbol; independent symbols still do not
         # share the account's cash or max-open-position limit in this phase.
         i = exit_idx + 1
