@@ -30,7 +30,7 @@ def swing_frame():
         (117, 119, 108, 110),
         (109, 115, 105, 112),
         (111, 116, 106, 113),
-        (112, 114, 107, 109),
+        (112, 114, 106, 109),
     ]
     return pd.DataFrame(values, columns=["Open", "High", "Low", "Close"],
                         index=pd.date_range("2025-01-01", periods=len(values), freq="B"))
