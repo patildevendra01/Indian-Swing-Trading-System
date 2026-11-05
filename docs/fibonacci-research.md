@@ -45,7 +45,7 @@ Outputs:
 Run unit tests:
 
 ```bash
-python -m unittest tests.test_fibonacci_research -v
+python -m unittest discover -s tests -p 'test_fibonacci_research.py' -v
 ```
 
 ## Important interpretation limits
