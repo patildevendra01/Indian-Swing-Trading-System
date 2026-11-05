@@ -108,7 +108,8 @@ def reconstruct_portfolio(frame, initial_capital=15000.0, risk_pct=0.5,
             turnover = (float(row.entry) + float(row.exit)) * qty
             raw_pnl = (float(row.exit) - float(row.entry)) * qty
             costs = turnover * cost_bps / 10000.0
-            slippage = turnover * 2 * slippage_bps / 10000.0
+            # Turnover already includes both entry and exit legs; apply per-side bps once.
+            slippage = turnover * slippage_bps / 10000.0
             pnl = raw_pnl - costs - slippage
             position_value = float(row.entry) * qty
             active.append({"exit_date": row.exit_date, "position_value": position_value, "pnl": pnl})
