@@ -407,6 +407,9 @@ def main():
     print(f"\nCost model: {args.cost_model}" +
           (" (brokerage/statutory/DP estimates; slippage remains separate)." if selected_cost_model else
            f" (legacy {cost_bps:g} bps per side; slippage {slippage_bps:g} bps per side)."))
+    print(f"\nCost model: {args.cost_model}" +
+          (" (brokerage, statutory and DP estimates; slippage remains separate)." if selected_cost_model else
+           f" (legacy {cost_bps:g} bps per side; slippage {slippage_bps:g} bps per side)."))
     print("\nLimitations: independent single-symbol simulations, not a portfolio; trade-close drawdown, "
           "rough aggregate exposure, current-watchlist survivorship bias, and simplified costs. "
           "No live execution or investment advice.")
