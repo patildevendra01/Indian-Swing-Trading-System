@@ -56,6 +56,26 @@ class BacktestLogicTests(unittest.TestCase):
         self.assertEqual(trades[0]["holding_sessions"], 3)
         self.assertEqual(trades[0]["exit_reason"], "time_exit")
 
+    def test_opt_in_delivery_cost_model_adds_fee_breakdown_without_changing_entry_logic(self):
+        from src.costs import DeliveryCostModel
+        model = DeliveryCostModel(
+            name="test", brokerage_rate=0.0025, stt_buy_rate=0.001,
+            stt_sell_rate=0.001, exchange_rate=0.0000307,
+            sebi_rate=0.000001, stamp_duty_buy_rate=0.00015,
+            gst_rate=0.18, dp_sell_charge_inr=25.0,
+        )
+        trades, diag = simulate_symbol(
+            qualifying_frame(104), "TEST.NS", sample_config(),
+            cost_bps=0, slippage_bps=0, cost_model=model)
+        self.assertEqual(diag["raw_signals"], 1)
+        self.assertEqual(len(trades), 1)
+        self.assertGreater(trades[0]["estimated_costs_inr"], 25.0)
+        self.assertIn("brokerage_inr", trades[0])
+        self.assertEqual(trades[0]["dp_charges_inr"], 25.0)
+        self.assertAlmostEqual(
+            trades[0]["net_pnl_inr"],
+            trades[0]["gross_pnl_inr"] - trades[0]["estimated_costs_inr"], places=2)
+
     def test_incomplete_final_holding_window_is_not_a_completed_time_exit(self):
         trades, diag = simulate_symbol(qualifying_frame(103), "TEST.NS", sample_config(),
                                        cost_bps=0, slippage_bps=0)
