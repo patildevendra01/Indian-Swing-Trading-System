@@ -62,6 +62,35 @@ class BacktestLogicTests(unittest.TestCase):
         self.assertEqual(trades, [])
         self.assertEqual(diag["truncated_positions"], 1)
 
+    def test_signal_window_does_not_restart_warmup_at_oos_boundary(self):
+        frame = qualifying_frame(104)
+        start = frame.index[100]
+        end = frame.index[101]
+        trades, diag = simulate_symbol(
+            frame, "TEST.NS", sample_config(), cost_bps=0, slippage_bps=0,
+            signal_start=start, signal_end=end)
+        self.assertEqual(diag["raw_signals"], 1)
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0]["signal_date"], str(start.date()))
+
+    def test_signal_window_excludes_dates_outside_requested_period(self):
+        from src.backtest import count_filter_passes
+        frame = qualifying_frame(104)
+        start, end = frame.index[101], frame.index[102]
+        counts = count_filter_passes(frame, sample_config(),
+                                     signal_start=start, signal_end=end)
+        self.assertEqual(counts["bars_evaluated"], 1)
+        self.assertEqual(counts["raw_signals"], 1)
+
+    def test_signals_before_oos_start_are_not_replayed_in_oos(self):
+        frame = qualifying_frame(105)
+        start, end = frame.index[101], frame.index[102]
+        trades, diag = simulate_symbol(
+            frame, "TEST.NS", sample_config(), cost_bps=0, slippage_bps=0,
+            signal_start=start, signal_end=end)
+        self.assertEqual(diag["raw_signals"], 1)
+        self.assertEqual(trades[0]["signal_date"], str(start.date()))
+
 
 if __name__ == "__main__":
     unittest.main()
