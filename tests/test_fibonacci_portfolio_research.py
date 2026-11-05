@@ -49,6 +49,7 @@ class FibonacciPortfolioTests(unittest.TestCase):
         self.assertEqual(len(rejected), 1)
         self.assertEqual(rejected.iloc[0]["reason"], "max_concurrent_positions")
         self.assertEqual(summary.iloc[0]["accepted_trades"], 4)
+        self.assertEqual(summary.iloc[0]["max_concurrent_positions"], 3)
         self.assertEqual(summary.iloc[0]["risk_budget_per_entry_inr"], 75.0)
         self.assertLessEqual(accepted["planned_risk_inr"].max(), 75.0)
 
