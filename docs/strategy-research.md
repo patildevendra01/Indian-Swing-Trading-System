@@ -181,3 +181,21 @@ These remain diagnostics over independent single-symbol simulations, not a true
 shared-capital portfolio. They do not mark positions to market daily, model cash
 constraints, or represent intraday drawdown. Exposure can exceed shared-portfolio
 limits and must not be interpreted as executable portfolio utilisation.
+
+
+## Phase 10: full-history warm-up with date-scoped signal windows
+
+The chronological development and OOS periods now share the same full per-symbol
+history for indicator calculation and warm-up. The 100-bar (or larger configured
+indicator) warm-up is applied once from the beginning of each symbol's history,
+not restarted at the development/OOS split. Only signal dates are restricted to
+the requested period; a signal near a period boundary may complete its normal
+holding window using subsequent bars. Trades are attributed to the period of
+their signal date.
+
+This corrects the previous loss of the first 100 OOS bars caused by slicing each
+symbol's data before simulation. It does not change signal filters, entry/exit
+rules, stop/target distances, sizing, costs, or risk settings. Development trades
+may finish after the split, and the independent period simulations are still not
+a shared-capital portfolio. A future portfolio simulator must explicitly model
+positions carried across the split and reset OOS portfolio capital at the split.
