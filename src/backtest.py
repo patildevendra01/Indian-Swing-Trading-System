@@ -90,14 +90,19 @@ def _filter_checks(row, st):
     }
 
 
-def count_filter_passes(frame: pd.DataFrame, cfg: dict) -> dict:
-    """Count each filter pass/fail and fully-qualified signals after EMA warm-up."""
+def count_filter_passes(frame: pd.DataFrame, cfg: dict,
+                        signal_start=None, signal_end=None) -> dict:
+    """Count filter outcomes within a signal window after full-history warm-up."""
     st = cfg["strategy"]
     warmup = max(100, st["ema_slow"] * 2, st["breakout_lookback"] + st["volume_lookback"])
     counts = {f"{name}_{side}": 0 for name in FILTER_NAMES for side in ("pass", "fail")}
     counts["bars_evaluated"] = 0
     counts["raw_signals"] = 0
-    for _, row in frame.iloc[warmup:-1].iterrows():
+    for date, row in frame.iloc[warmup:-1].iterrows():
+        if signal_start is not None and date < pd.Timestamp(signal_start):
+            continue
+        if signal_end is not None and date >= pd.Timestamp(signal_end):
+            continue
         if not all(pd.notna(row.get(k)) for k in ("Close", "ema_fast", "ema_slow", "rsi", "atr_pct")):
             continue
         checks = _filter_checks(row, st)
@@ -111,8 +116,9 @@ def count_filter_passes(frame: pd.DataFrame, cfg: dict) -> dict:
 
 def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
                     cost_bps: float = 20.0, slippage_bps: float = 5.0,
-                    max_gap_pct: float = 2.5) -> tuple[list[dict], dict]:
-    """Run fixed rules on supplied OHLCV data; useful for deterministic tests."""
+                    max_gap_pct: float = 2.5, signal_start=None,
+                    signal_end=None) -> tuple[list[dict], dict]:
+    """Run fixed rules on full history, taking signals only inside the requested window."""
     market, account, st = cfg["market"], cfg["account"], cfg["strategy"]
     df = frame.copy()
     if not {"ema_fast", "ema_slow", "rsi", "relative_volume", "prior_high",
@@ -125,6 +131,12 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
     warmup = max(100, st["ema_slow"] * 2, st["breakout_lookback"] + st["volume_lookback"])
     i = warmup
     while i < len(df) - 1:
+        signal_date = df.index[i]
+        if signal_start is not None and signal_date < pd.Timestamp(signal_start):
+            i += 1
+            continue
+        if signal_end is not None and signal_date >= pd.Timestamp(signal_end):
+            break
         row = df.iloc[i]
         if not all(pd.notna(row.get(k)) for k in ("Close", "ema_fast", "ema_slow", "rsi", "atr",
                                                    "relative_volume", "prior_high", "avg_turnover", "atr_pct")):
@@ -336,9 +348,13 @@ def main():
             segment = data.loc[(data.index >= start) & (data.index < end)]
             if segment.empty:
                 continue
-            trades, diag = simulate_symbol(segment, yahoo_symbol(symbol, cfg["market"].get("exchange", "NSE")),
-                                           cfg, cost_bps, slippage_bps, max_gap_pct)
-            counts = count_filter_passes(segment, cfg)
+            # Indicators and the warm-up are based on the complete symbol history.
+            # Only signal dates are restricted to this chronological reporting window.
+            trades, diag = simulate_symbol(
+                data, yahoo_symbol(symbol, cfg["market"].get("exchange", "NSE")),
+                cfg, cost_bps, slippage_bps, max_gap_pct,
+                signal_start=start, signal_end=end)
+            counts = count_filter_passes(data, cfg, signal_start=start, signal_end=end)
             all_trades[label].extend([{**t, "period": label} for t in trades])
             for k in aggregate[label]["signals"]:
                 aggregate[label]["signals"][k] += counts[k]
