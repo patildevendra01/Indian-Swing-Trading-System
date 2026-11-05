@@ -14,6 +14,11 @@ profiles:
     gst_on_sebi: true
     verified_on: '2026-11-05'
     status: 'Public schedule estimate; DP assumes no POA/DDPI; verify contract note.'
+    source_urls:
+      brokerage: 'https://cms.religareonline.com/media/14164/basic-plan.pdf'
+      exchange: 'https://nsearchives.nseindia.com/content/circulars/FA73061.pdf'
+      statutory: 'https://www.nseindia.com/static/invest/first-time-investor-sebi-turnover-fees-stt-other-levies'
+      dp: 'https://www.religareonline.com/wp-content/uploads/2024/02/religare_elite_v1.pdf'
   delivery_template_unverified:
     brokerage_rate: null
     stt_buy_rate: null
