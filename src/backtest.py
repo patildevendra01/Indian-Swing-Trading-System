@@ -15,11 +15,13 @@ try:
     from .indicators import add_indicators
     from .risk import build_trade_plan
     from .scan import yahoo_symbol
+    from .metrics import chronological_trade_metrics
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from src.indicators import add_indicators
     from src.risk import build_trade_plan
     from src.scan import yahoo_symbol
+    from src.metrics import chronological_trade_metrics
 
 
 FILTER_NAMES = ("trend", "momentum", "volume", "breakout", "price", "turnover", "volatility")
@@ -218,21 +220,17 @@ def simulate_symbol(frame: pd.DataFrame, symbol: str, cfg: dict,
     return trades, diagnostics
 
 
-def performance_summary(trades: pd.DataFrame, initial_capital: float, total_sessions: int) -> dict:
+def performance_summary(trades: pd.DataFrame, initial_capital: float, total_sessions: int,
+                        trading_calendar=None) -> dict:
+    calendar = trading_calendar if trading_calendar is not None else []
+    metrics = chronological_trade_metrics(trades, initial_capital, calendar)
     if trades.empty:
-        return {"trades": 0, "average_r": 0.0, "max_drawdown_pct": 0.0,
-                "average_holding_sessions": 0.0, "exposure_pct": 0.0}
-    pnl = trades["net_pnl_inr"].astype(float)
-    equity = initial_capital + pnl.cumsum()
-    peak = equity.cummax().clip(lower=initial_capital)
-    drawdown = (equity / peak - 1.0) * 100
-    held = trades["holding_sessions"].astype(float).sum()
+        return {"trades": 0, "average_r": 0.0, "average_holding_sessions": 0.0, **metrics}
     return {
         "trades": len(trades),
         "average_r": round(float(trades["net_r_multiple"].dropna().mean()), 3),
-        "max_drawdown_pct": round(float(drawdown.min()), 2),
         "average_holding_sessions": round(float(trades["holding_sessions"].mean()), 2),
-        "exposure_pct": round(100.0 * held / max(total_sessions, 1), 2),
+        **metrics,
     }
 
 
@@ -253,9 +251,9 @@ def nifty_buy_hold_return(start_date, end_date):
         return None
 
 
-def _print_period_report(label, trades, signals, diagnostics, capital, sessions):
+def _print_period_report(label, trades, signals, diagnostics, capital, sessions, trading_calendar):
     frame = pd.DataFrame(trades)
-    metrics = performance_summary(frame, capital, sessions)
+    metrics = performance_summary(frame, capital, sessions, trading_calendar)
     print(f"\n{label}: bars={signals['bars_evaluated']} raw_signals={signals['raw_signals']} "
           f"completed_trades={len(frame)} gap_rejected={diagnostics['gap_rejections']} "
           f"risk_rejected={diagnostics['risk_rejections']} truncated={diagnostics['truncated_positions']}")
@@ -267,9 +265,11 @@ def _print_period_report(label, trades, signals, diagnostics, capital, sessions)
         gross_loss = -frame.loc[frame.net_pnl_inr < 0, "net_pnl_inr"].sum()
         print(f"Net P&L ₹{frame.net_pnl_inr.sum():,.2f} | Win rate {len(winners)/len(frame):.1%} | "
               f"Profit factor {gross_profit/gross_loss if gross_loss else float('inf'):.2f}")
-    print(f"Average R {metrics['average_r']:.3f} | trade-close drawdown {metrics['max_drawdown_pct']:.2f}% | "
-          f"avg hold {metrics['average_holding_sessions']:.2f} sessions | "
-          f"rough independent-symbol exposure {metrics['exposure_pct']:.2f}%")
+    print(f"Average R {metrics['average_r']:.3f} | chronological trade-close drawdown {metrics['max_drawdown_pct']:.2f}% | "
+          f"avg hold {metrics['average_holding_sessions']:.2f} sessions")
+    print(f"Independent-symbol exposure: avg concurrent {metrics['avg_concurrent_positions']:.2f}, "
+          f"max {metrics['max_concurrent_positions']}, days invested {metrics['days_with_position_pct']:.2f}%, "
+          f"avg capital exposure {metrics['avg_capital_exposure_pct']:.2f}%")
     return frame
 
 
@@ -352,8 +352,14 @@ def main():
     for label in ("development_3y", "out_of_sample_2y"):
         a = aggregate[label]
         counts = {**a["signals"], **a["signals_extra"]}
+        period_start, period_end = ((earliest, split_date) if label == "development_3y"
+                                    else (split_date, latest + pd.Timedelta(days=1)))
+        calendar = pd.DatetimeIndex(sorted(set(
+            date for data in downloaded.values()
+            for date in data.index[(data.index >= period_start) & (data.index < period_end)]
+        )))
         frame = _print_period_report(label, all_trades[label], counts, a["diag"],
-                                     float(account["capital_inr"]), a["sessions"])
+                                     float(account["capital_inr"]), a["sessions"], calendar)
         if not frame.empty:
             frames.append(frame)
     if frames:
