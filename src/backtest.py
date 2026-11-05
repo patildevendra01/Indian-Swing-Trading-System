@@ -405,9 +405,6 @@ def main():
         print(f"NIFTY 50 buy-and-hold price return over out-of-sample dates: {benchmark:.2f}% "
               "(dividends excluded; compare as a market reference, not a portfolio-equivalent return).")
     print(f"\nCost model: {args.cost_model}" +
-          (" (brokerage/statutory/DP estimates; slippage remains separate)." if selected_cost_model else
-           f" (legacy {cost_bps:g} bps per side; slippage {slippage_bps:g} bps per side)."))
-    print(f"\nCost model: {args.cost_model}" +
           (" (brokerage, statutory and DP estimates; slippage remains separate)." if selected_cost_model else
            f" (legacy {cost_bps:g} bps per side; slippage {slippage_bps:g} bps per side)."))
     print("\nLimitations: independent single-symbol simulations, not a portfolio; trade-close drawdown, "
