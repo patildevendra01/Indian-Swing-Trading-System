@@ -1,0 +1,25 @@
+# Religare Basic Plan NSE delivery cost estimates. Rates are decimal fractions.
+profiles:
+  religare_basic_estimate:
+    brokerage_rate: 0.0025
+    stt_buy_rate: 0.001
+    stt_sell_rate: 0.001
+    exchange_rate: 0.0000307
+    sebi_rate: 0.000001
+    stamp_duty_buy_rate: 0.00015
+    gst_rate: 0.18
+    dp_sell_charge_inr: 25.0
+    gst_on_brokerage: true
+    gst_on_exchange: true
+    gst_on_sebi: true
+    verified_on: '2026-11-05'
+    status: 'Public schedule estimate; DP assumes no POA/DDPI; verify contract note.'
+  delivery_template_unverified:
+    brokerage_rate: null
+    stt_buy_rate: null
+    stt_sell_rate: null
+    exchange_rate: null
+    sebi_rate: null
+    stamp_duty_buy_rate: null
+    gst_rate: null
+    dp_sell_charge_inr: null
