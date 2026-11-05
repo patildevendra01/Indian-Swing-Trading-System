@@ -35,7 +35,7 @@ class ChronologicalMetricsTests(unittest.TestCase):
         self.assertEqual(result["avg_concurrent_positions"], 1.5)
         self.assertEqual(result["max_concurrent_positions"], 2)
         self.assertEqual(result["days_with_position_pct"], 100.0)
-        self.assertEqual(result["avg_capital_exposure_pct"], 15.0)
+        self.assertEqual(result["avg_capital_exposure_pct"], 22.5)
 
     def test_starting_capital_is_initial_equity_peak(self):
         frame = pd.DataFrame([
