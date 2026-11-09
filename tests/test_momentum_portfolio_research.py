@@ -61,6 +61,7 @@ class MomentumPortfolioTests(unittest.TestCase):
             self.assertEqual(trades.iloc[0]["exit_reason"], "time_exit")
             self.assertEqual(summary["accepted_trades"], 1)
             self.assertEqual(summary["max_concurrent_positions"], 1)
+            self.assertAlmostEqual(summary["ending_equity_inr"], 15000 + summary["net_pnl_inr"], places=2)
 
     def test_stop_is_checked_before_time_exit(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -89,6 +90,31 @@ class MomentumPortfolioTests(unittest.TestCase):
             self.assertEqual(len(trades), 1)
             self.assertEqual(trades.iloc[0]["exit_reason"], "stop_gap")
             self.assertEqual(trades.iloc[0]["exit"], 96.0)
+
+
+    def test_trade_cannot_cross_period_boundary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            dates = pd.bdate_range("2026-03-02", periods=6)
+            bars = pd.DataFrame({
+                "Date": dates, "Open": [100] * 6, "High": [101] * 6,
+                "Low": [99] * 6, "Close": [100] * 6,
+            })
+            bars.to_csv(folder / "AAA_NS.csv", index=False)
+            candidates = pd.DataFrame([{
+                "signal_date": dates[1], "symbol": "AAA",
+                "signal_close": 100.0, "signal_atr": 1.0,
+                "return_63_pct": 8.0, "return_126_pct": 15.0,
+                "relative_63_pct": 3.0, "relative_126_pct": 5.0,
+                "momentum_score": 0.04,
+            }])
+            trades, _, summary = _run_portfolio(
+                candidates, dates, "development", dates[0],
+                dates[3], 2, config(folder), FlatCostModel(), 0.0
+            )
+            self.assertTrue(trades.empty)
+            self.assertEqual(summary["accepted_trades"], 0)
+            self.assertEqual(summary["ending_equity_inr"], 15000.0)
 
 
 if __name__ == "__main__":
