@@ -109,6 +109,7 @@ def build_momentum_candidates(data_dir, symbols, index_file="INDEX_NSEI.csv"):
 
 def _run_portfolio(candidates, calendar, period, start_date, end_date,
                    horizon, cfg, cost_model, slippage_bps):
+    """Run one isolated period; no positions or P&L cross its boundaries."""
     account = cfg["account"]
     capital = float(account["capital_inr"])
     risk_budget = capital * float(account["risk_per_trade_pct"]) / 100.0
@@ -119,21 +120,57 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
     positions, pending = [], []
     trades, equity_rows, rejected = [], [], []
     peak_positions = 0
+
+    period_indices = [i for i, d in enumerate(calendar) if start_date <= d < end_date]
+    if not period_indices:
+        return pd.DataFrame(), pd.DataFrame(), {
+            "period": period, "horizon_sessions": horizon, "candidate_signals": 0,
+            "accepted_trades": 0, "rejected_entries": 0, "net_pnl_inr": 0.0,
+            "ending_equity_inr": capital, "return_pct": 0.0, "win_rate_pct": 0.0,
+            "profit_factor": 0.0, "average_r": None,
+            "max_daily_mark_to_market_drawdown_pct": 0.0,
+            "max_concurrent_positions": 0,
+        }
+
+    first_i, end_i = period_indices[0], period_indices[-1] + 1
     by_date = {d: g.to_dict("records") for d, g in candidates.groupby("signal_date")} if not candidates.empty else {}
     bar_cache = {
         symbol: _read_bars(Path(cfg["_data_dir"]) / f"{symbol}_NS.csv")
         for symbol in candidates["symbol"].dropna().astype(str).unique()
     } if not candidates.empty else {}
 
-    # Entry date must leave enough calendar sessions for the full holding horizon.
-    for i in range(1, len(calendar) - horizon + 1):
+    def record_exit(pos, date, exit_price, reason):
+        effective_exit = exit_price * (1.0 - slip)
+        gross = (effective_exit - pos["effective_entry"]) * pos["quantity"]
+        charges = cost_model.calculate(pos["entry"], exit_price, pos["quantity"])
+        costs = float(charges["total_charges_inr"])
+        net = gross - costs
+        planned_risk = (pos["effective_entry"] - pos["stop"]) * pos["quantity"]
+        trades.append({
+            "period": period, "horizon_sessions": horizon,
+            "symbol": pos["symbol"], "signal_date": str(pos["signal_date"].date()),
+            "entry_date": str(pos["entry_date"].date()), "exit_date": str(date.date()),
+            "entry": round(pos["entry"], 4), "exit": round(exit_price, 4),
+            "stop": round(pos["stop"], 4), "quantity": pos["quantity"],
+            "holding_sessions": pos["held_sessions"], "exit_reason": reason,
+            "momentum_score": pos["momentum_score"],
+            "return_63_pct": pos["return_63_pct"], "return_126_pct": pos["return_126_pct"],
+            "relative_63_pct": pos["relative_63_pct"], "relative_126_pct": pos["relative_126_pct"],
+            "gross_pnl_inr": round(gross, 2), "estimated_costs_inr": round(costs, 2),
+            "net_pnl_inr": round(net, 2),
+            "net_r_multiple": round(net / planned_risk, 4) if planned_risk > 0 else None,
+        })
+        release_i = min(calendar.get_indexer([date])[0] + 1, len(calendar) - 1)
+        pending.append({
+            "release_date": calendar[release_i] if release_i > calendar.get_indexer([date])[0] else date,
+            "cash_release": pos["notional"] + net,
+        })
+
+    for i in range(max(1, first_i), end_i):
         date = calendar[i]
         signal_date = calendar[i - 1]
-        if date < start_date:
-            continue
-        can_enter = start_date <= signal_date < end_date
 
-        # Release proceeds only on the session after the prior close exit.
+        # Release exit proceeds only on the following session.
         still_pending = []
         for item in pending:
             if item["release_date"] <= date:
@@ -142,15 +179,17 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
                 still_pending.append(item)
         pending = still_pending
 
+        # Require the full planned holding period to fit inside this period.
+        can_enter = (start_date <= signal_date < end_date and i + horizon <= end_i)
         todays = by_date.get(signal_date, []) if can_enter else []
         for candidate in todays:
+            if any(p["symbol"] == candidate["symbol"] for p in positions):
+                continue
             if len(positions) >= max_positions:
                 rejected.append({"period": period, "horizon": horizon,
                                  "signal_date": str(signal_date.date()),
                                  "symbol": candidate["symbol"], "reason": "max_positions"})
                 break
-            if any(p["symbol"] == candidate["symbol"] for p in positions):
-                continue
             bars = bar_cache[candidate["symbol"]]
             if date not in bars.index:
                 continue
@@ -181,7 +220,6 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
             })
             peak_positions = max(peak_positions, len(positions))
 
-        # Check today's OHLC for stops/time exits. Cash is released tomorrow.
         remaining = []
         for pos in positions:
             bars = bar_cache[pos["symbol"]]
@@ -190,7 +228,7 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
                 continue
             bar = bars.loc[date]
             pos["held_sessions"] += 1
-            op, hi, lo, cl = map(float, (bar["Open"], bar["High"], bar["Low"], bar["Close"]))
+            op, lo, cl = float(bar["Open"]), float(bar["Low"]), float(bar["Close"])
             exit_price, reason = None, None
             if op <= pos["stop"]:
                 exit_price, reason = op, "stop_gap"
@@ -200,38 +238,27 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
                 exit_price, reason = cl, "time_exit"
             if exit_price is None:
                 remaining.append(pos)
-                continue
-
-            effective_exit = exit_price * (1.0 - slip)
-            gross = (effective_exit - pos["effective_entry"]) * pos["quantity"]
-            charges = cost_model.calculate(pos["entry"], exit_price, pos["quantity"])
-            costs = float(charges["total_charges_inr"])
-            net = gross - costs
-            planned_risk = (pos["effective_entry"] - pos["stop"]) * pos["quantity"]
-            trade = {
-                "period": period, "horizon_sessions": horizon,
-                "symbol": pos["symbol"], "signal_date": str(pos["signal_date"].date()),
-                "entry_date": str(pos["entry_date"].date()), "exit_date": str(date.date()),
-                "entry": round(pos["entry"], 4), "exit": round(exit_price, 4),
-                "stop": round(pos["stop"], 4), "quantity": pos["quantity"],
-                "holding_sessions": pos["held_sessions"], "exit_reason": reason,
-                "momentum_score": pos["momentum_score"],
-                "return_63_pct": pos["return_63_pct"], "return_126_pct": pos["return_126_pct"],
-                "relative_63_pct": pos["relative_63_pct"], "relative_126_pct": pos["relative_126_pct"],
-                "gross_pnl_inr": round(gross, 2), "estimated_costs_inr": round(costs, 2),
-                "net_pnl_inr": round(net, 2), "net_r_multiple": round(net / planned_risk, 4)
-                    if planned_risk > 0 else None,
-            }
-            trades.append(trade)
-            pending.append({"release_date": calendar[i + 1] if i + 1 < len(calendar) else date,
-                            "cash_release": pos["notional"] + net})
+            else:
+                record_exit(pos, date, exit_price, reason)
         positions = remaining
 
-        # Mark-to-market equity includes cash, unsettled proceeds and open positions.
+        # Liquidate any residual positions on the final session of this period.
+        if i == end_i - 1 and positions:
+            for pos in positions:
+                bars = bar_cache[pos["symbol"]]
+                if date in bars.index and pd.notna(bars.at[date, "Close"]):
+                    record_exit(pos, date, float(bars.at[date, "Close"]), "period_end_exit")
+                else:
+                    # No valid final close: retain its last marked value and flag it.
+                    rejected.append({"period": period, "horizon": horizon,
+                                     "signal_date": str(pos["signal_date"].date()),
+                                     "symbol": pos["symbol"], "reason": "unpriced_period_end_position"})
+            positions = []
+
         open_value = 0.0
         for pos in positions:
             bars = bar_cache[pos["symbol"]]
-            if date in bars.index:
+            if date in bars.index and pd.notna(bars.at[date, "Close"]):
                 open_value += float(bars.at[date, "Close"]) * pos["quantity"]
         pending_value = sum(x["cash_release"] for x in pending)
         equity_rows.append({"date": date, "equity": cash + pending_value + open_value})
@@ -239,8 +266,7 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
     trade_frame = pd.DataFrame(trades)
     equity = pd.DataFrame(equity_rows)
     if equity.empty:
-        max_dd = 0.0
-        ending = capital
+        max_dd, ending = 0.0, capital
     else:
         series = equity.set_index("date")["equity"]
         peaks = series.cummax().clip(lower=capital)
@@ -264,7 +290,6 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
         "max_concurrent_positions": peak_positions,
     }
     return trade_frame, pd.DataFrame(rejected), summary
-
 
 def run_research(data_dir, symbols, cfg, cost_model, slippage_bps=5.0,
                  horizons=(5, 10, 15), index_file="INDEX_NSEI.csv"):
