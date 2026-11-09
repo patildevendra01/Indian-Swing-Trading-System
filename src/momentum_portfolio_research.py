@@ -115,14 +115,20 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
     cash = capital
     positions, pending = [], []
     trades, equity_rows, rejected = [], [], []
+    peak_positions = 0
     by_date = {d: g.to_dict("records") for d, g in candidates.groupby("signal_date")} if not candidates.empty else {}
+    bar_cache = {
+        symbol: _read_bars(Path(cfg["_data_dir"]) / f"{symbol}_NS.csv")
+        for symbol in candidates["symbol"].dropna().astype(str).unique()
+    } if not candidates.empty else {}
 
     # Entry date must leave enough calendar sessions for the full holding horizon.
     for i in range(1, len(calendar) - horizon + 1):
         date = calendar[i]
         signal_date = calendar[i - 1]
-        if signal_date < start_date or signal_date >= end_date:
+        if date < start_date:
             continue
+        can_enter = start_date <= signal_date < end_date
 
         # Release proceeds only on the session after the prior close exit.
         still_pending = []
@@ -133,7 +139,7 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
                 still_pending.append(item)
         pending = still_pending
 
-        todays = by_date.get(signal_date, [])
+        todays = by_date.get(signal_date, []) if can_enter else []
         for candidate in todays:
             if len(positions) >= max_positions:
                 rejected.append({"period": period, "horizon": horizon,
@@ -142,8 +148,7 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
                 break
             if any(p["symbol"] == candidate["symbol"] for p in positions):
                 continue
-            bars_path = Path(cfg["_data_dir"]) / f"{candidate['symbol']}_NS.csv"
-            bars = _read_bars(bars_path)
+            bars = bar_cache[candidate["symbol"]]
             if date not in bars.index:
                 continue
             raw_entry = float(bars.at[date, "Open"])
@@ -171,12 +176,12 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
                 "quantity": qty, "notional": notional,
                 "held_sessions": 0, "horizon": horizon,
             })
+            peak_positions = max(peak_positions, len(positions))
 
         # Check today's OHLC for stops/time exits. Cash is released tomorrow.
         remaining = []
         for pos in positions:
-            bars_path = Path(cfg["_data_dir"]) / f"{pos['symbol']}_NS.csv"
-            bars = _read_bars(bars_path)
+            bars = bar_cache[pos["symbol"]]
             if date not in bars.index:
                 remaining.append(pos)
                 continue
@@ -222,8 +227,7 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
         # Mark-to-market equity includes cash, unsettled proceeds and open positions.
         open_value = 0.0
         for pos in positions:
-            bars_path = Path(cfg["_data_dir"]) / f"{pos['symbol']}_NS.csv"
-            bars = _read_bars(bars_path)
+            bars = bar_cache[pos["symbol"]]
             if date in bars.index:
                 open_value += float(bars.at[date, "Close"]) * pos["quantity"]
         pending_value = sum(x["cash_release"] for x in pending)
@@ -236,7 +240,8 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
         ending = capital
     else:
         series = equity.set_index("date")["equity"]
-        max_dd = float(((series / series.cummax()) - 1.0).min() * 100.0)
+        peaks = series.cummax().clip(lower=capital)
+        max_dd = float(((series / peaks) - 1.0).min() * 100.0)
         ending = float(series.iloc[-1])
     pnl = trade_frame["net_pnl_inr"] if not trade_frame.empty else pd.Series(dtype=float)
     gp = float(pnl[pnl > 0].sum()) if len(pnl) else 0.0
@@ -253,7 +258,7 @@ def _run_portfolio(candidates, calendar, period, start_date, end_date,
         "profit_factor": round(gp / gl, 3) if gl else (float("inf") if gp else 0.0),
         "average_r": round(float(trade_frame["net_r_multiple"].mean()), 3) if len(trade_frame) else None,
         "max_daily_mark_to_market_drawdown_pct": round(max_dd, 2),
-        "max_concurrent_positions": max_positions if positions else min(max_positions, 3),
+        "max_concurrent_positions": peak_positions,
     }
     return trade_frame, pd.DataFrame(rejected), summary
 
