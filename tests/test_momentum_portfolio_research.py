@@ -83,7 +83,7 @@ class MomentumPortfolioTests(unittest.TestCase):
             }])
             trades, _, _ = _run_portfolio(
                 candidates, dates, "development", dates[0],
-                dates[-1] + pd.Timedelta(days=1), 5,
+                dates[-1] + pd.Timedelta(days=1), 3,
                 config(folder), FlatCostModel(), 0.0
             )
             self.assertEqual(len(trades), 1)
