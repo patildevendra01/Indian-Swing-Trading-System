@@ -40,6 +40,9 @@ def build_momentum_candidates(data_dir, symbols, index_file="INDEX_NSEI.csv"):
     """Build point-in-time candidate rows on NIFTY trading dates."""
     folder = Path(data_dir)
     market = _read_bars(folder / index_file)
+    # The current NSE session may still be forming; use completed sessions only.
+    today_ist = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
+    market = market.loc[market.index < today_ist]
     calendar = market.index
     market_close = market["Close"].reindex(calendar)
     market_63 = market_close / market_close.shift(63) - 1.0
@@ -327,7 +330,7 @@ def main():
         "- Universe: configured 100-symbol watchlist; current constituents applied historically create survivorship bias.",
         "- Signal: positive 63- and 126-session returns, both outperforming NIFTY 50, with Close > SMA50 > SMA200.",
         "- Ranking: equal-weight average of 63- and 126-session excess returns; strongest candidates considered first.",
-        "- Entry: next NIFTY session open after signal close.",
+        "- Entry: next NIFTY session open after signal close; the current calendar day's possibly incomplete candle is excluded.",
         "- Exit: 2.5 x signal-date ATR protective stop or fixed 5/10/15-session time exit, whichever occurs first.",
         "- Sizing: fixed starting-capital risk budget and position cap from config; shared cash and maximum concurrent positions enforced.",
         f"- Costs: {args.cost_model}; adverse slippage {args.slippage_bps:g} bps per side.",
